@@ -1,0 +1,506 @@
+#!/usr/bin/env bash
+
+LC_ALL=C
+LANG=C
+CONFIG_FILE="/etc/backup_new.conf"
+SCRIPT_NAME=backup_new
+
+# Configuration options
+EXCLUDED_FILESYSTEMS="ocfs nfs cifs smb tmpfs none sysfs procfs devpts bind"
+COMMON_EXCLUDE=""
+
+COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib"
+
+# Includes
+###############################################################
+
+# colors() was auto-included from '/../functions/colors.sh' by make.sh
+# found on internets
+# The different colours as variables
+Y="\033[01;33m" # YELLOW
+C="\033[01;36m" # CYAN
+W="\033[01;37m" # WHITE
+B="\033[01;34m" # BLUE
+G="\033[01;32m" # GREEN
+D="\033[01;31m" # RED
+X="\033[00;37m" # Not sure...
+R="\033[0m"
+
+
+# checkVars() was auto-included from '/../functions/checkVars.sh' by make.sh
+# Checks if variable is set
+# Usage: do_check_vars VAR1 VAR2
+
+do_check_vars() {
+    for var in $*; do
+        eval k=\$$var
+        if [ x"$k" = "x" ]; then
+            __die "Variable $var is not set in config file"
+        fi
+    done
+}
+
+
+# misc() was auto-included from '/../functions/misc.sh' by make.sh
+__log() { echo "`date` : $*" ; }
+__die() { echo "$*"; exit 1 ; rm -rf $TMPDIR; }
+__check_status() {
+    local lc="$BASH_COMMAND" rc=$?
+    echo "Command [$lc] exited with code [$rc]"
+    ERR=1
+}
+
+function __onexit() {
+    if [ $ERR -eq 1 ]; then
+        cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" root
+    fi
+}
+
+
+# autoupdate() was auto-included from '/../functions/autoupdate.sh' by make.sh
+
+##### Auto-update code{{{
+function autoupdate() {
+
+COMMON_URI="http://non7top.tk/pub/"
+MD5SUM_URI="$COMMON_URI/md5sum"
+SCRIPT_URI="$COMMON_URI/$SCRIPT_NAME"
+SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
+
+TMPDIR=$(mktemp -d -t $SCRIPT_NAME.XXXXXX)
+
+# Checking for update
+cd $TMPDIR
+wget -q $MD5SUM_URI -O md5sum
+#false
+if [ $? -eq 0 ]; then
+  cd $(dirname $SCRIPT_DEST)
+  #echo Checking existing file
+  cat $TMPDIR/md5sum | grep $SCRIPT_NAME | md5sum -c --status
+  if [ $? -eq 1 ]; then
+    echo Attempting update
+    cd $TMPDIR
+    wget -q $SCRIPT_URI -O $SCRIPT_NAME # Download script to temporary destination
+    echo Checking downloaded file
+    cat $TMPDIR/md5sum | grep $SCRIPT_NAME | md5sum -c --status # Compare what was downloaded to md5sum
+    if [[ $? -eq 0 && \
+        ( -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ) ]]; then
+      echo Updating with new version
+      mv $SCRIPT_DEST /tmp/
+      mv $SCRIPT_NAME $SCRIPT_DEST
+      chmod 700 $SCRIPT_DEST
+      exec $SCRIPT_DEST $*
+    else
+        echo "Error updating"
+        echo "Downloaded script doesn't match md5sum or dest not writable"
+    fi
+  fi
+fi
+cd
+rm -rf $TMPDIR
+}
+##### End auto-update }}}
+
+
+# ionice() was auto-included from '/../functions/ionice.sh' by make.sh
+# See ionice(1)
+# Workaround ionice on old openvz
+# exports variable IONICE which is either empty or contains the ionice command
+function set_ionice() {
+IONICE=
+if [ -x /usr/bin/ionice ] &&
+    /usr/bin/ionice -c3 true 2>/dev/null; then
+    __log "Enabling ionice"
+    IONICE="/usr/bin/ionice -c3"
+fi
+
+export IONICE
+}
+
+
+# setLock() was auto-included from '/../functions/setLock.sh' by make.sh
+function set_lock() {
+
+    NAME=${1:-backup}
+    # Try to obtain backup lock
+    mkdir -p /var/lock/subsys
+    exec 8>/var/lock/subsys/${NAME}
+    if ! flock -n -x 8; then
+        __log "Backup is already running or obtaining"
+        __log "/var/lock/subsys/${NAME} lock failed"
+        exit 1
+    fi
+
+}
+
+
+# readConfig() was auto-included from '/../functions/readConfig.sh' by make.sh
+do_read_config() {
+    CONFIG_FILE="$1"
+    if [ -z $CONFIG_FILE ]; then
+        return
+    fi
+    if [ -r "$CONFIG_FILE" ]; then
+        __log "Reading config file $CONFIG_FILE"
+        source "$CONFIG_FILE"
+    else
+        __log "WARNING: Config file '$CONFIG_FILE' not readable"
+    fi
+}
+
+
+
+LOG_DIR=/var/log/backup/$(basename $0)
+LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
+
+
+ERR=0
+
+trap '__check_status $LINENO' ERR
+trap __onexit EXIT
+set -o errtrace
+
+do_read_config "$CONFIG_FILE"
+
+# Parsing Input Parameters {{{
+#####################################################################
+allparams=$*
+g_myname_pid=$$
+myparams=""
+
+if [ $# -eq 0 ]; then
+    __die "No options specified"
+fi
+
+for myarg in ${allparams}
+do
+  arg=`printf '%s\n' $myarg | sed 's/^-//'`
+  case $arg in
+    target=*)       g_target=`echo $arg | sed 's/target=//g'`   ;; # Remote server
+    bkpdir=*)       g_bkpdir=`echo $arg | sed 's/bkpdir=//g'`   ;; # Dir on target (i.e. server name)
+    dirs=*)         g_dirs=`echo $arg | sed 's/dirs=//g'`       ;; # Dires to backup as /etc:/var
+    keep=*)         g_keep=`echo $arg | sed 's/keep=//g'`       ;; # For how long to store
+    clean=*)        g_clean=`echo $arg | sed 's/clean=//g'`     ;; # Day when clean
+    mode=*)         g_mode=`echo $arg | sed 's/mode=//g'`       ;; # What to do
+    config=*)       g_config=`echo $arg | sed 's/config=//g'`   ;; # Config file
+    tool=*)         g_tool=`echo $arg | sed 's/tool=//g'`       ;; # Tool used to backup files (duplicity/rdiff-backup)
+    duplicity_proto=*)   g_duplicity_proto=`echo $arg | sed 's/duplicity_proto=//g'`       ;; # sftp/ftp or whatever is supported
+    # Valid modes: mysql,fiels(tar,rsnapshot)
+    # mysql will store under $target/mysql with rdiff-backup
+    # files will store under $target/[dir basename] with rdiff-backup
+    # systar tarball of OS files
+
+    # systar options:
+    # target user@server::/dir
+    h|help)         myparams="$myparams help"                   ;;
+    n|dryrun)       myparams="$myparams dryrun"                 ;;
+    d|debug)        myparams="$myparams debug"                  ;;
+    v|verbose)      myparams="$myparams verbose"                ;;
+    *)              echo "$0: unrecognized action specified $arg" ; exit 1 ;;
+  esac
+  shift
+done
+
+echo ${myparams}| grep -i "help"   > /dev/null && do_help
+echo ${myparams}| grep -i "dryrun" > /dev/null && g_dummy="echo"
+echo ${myparams}| grep -i "debug" > /dev/null && g_debug=1
+echo ${myparams}| grep -i "verbose" > /dev/null && g_verbose=1
+
+### }}}
+
+do_read_config "$g_config"
+
+if [ x"$g_debug" = "x1" ]; then
+    set -xv
+elif [ x"$g_verbose" = "x1" ]; then
+    :
+else
+    mkdir -p "${LOG_DIR}" || __die "Cannot create $LOG_DIR. Exiting."
+    touch "${LOG_FILE}" || __die "Cannot create $LOG_FILE. Exiting."
+
+    # Redirect all output to log file
+    #exec > >(tee "$LOG_FILE") 2>&1
+    exec > $LOG_FILE 2>&1
+    ln -sf "$(basename $LOG_FILE)" "$LOG_DIR/$(basename $0).log"
+fi
+
+set_lock # Try to obtain backup lock
+set_ionice # Enable ionice if possible
+
+###### RUNTIME VARIABLES ###########
+# For now set default mode to default value
+g_mode="${g_mode:-files:mysql:clean}"
+g_tool="${g_tool:-rdiff-backup}"
+GPG_LOCAL_KEY="$( whoami )@$( hostname -f)"
+#
+####################################
+
+# Check if TARGET is remote (user@server::dir) or local location
+if ! echo $g_target | grep -q "::" ;then
+    __log "Detected local destination"
+    g_bkpdir=$g_target
+else
+    g_bkpdir=$(echo "$g_target" | cut -d: -f3 )
+    g_rserver=$(echo "$g_target" | cut -d: -f1 )
+    TARGET="remote"
+    __log "Detected remote destination S:$g_rserver D:$g_bkpdir"
+fi
+
+RDOPTS="--exclude **/etc/shadow\* --exclude **/etc/passwd\* \
+--exclude **/etc/group\* --exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
+--exclude **/web/stats --exclude **/clients/*/*/tmp \
+--exclude **/mod-tmp/* --exclude **/clients/*/*/log \
+--exclude **/var/named/chroot/var/run/dbus --exclude **/var/named/chroot/proc \
+--no-acls"
+
+if [ ! -z $g_rserver ]; then
+    # Check passwordless ssh connect to target
+    ssh -o "BatchMode yes" -o ConnectTimeout=15 -o StrictHostKeyChecking=no ${g_rserver} true
+    if [ $? -ne 0 ]; then
+        __die "Passwordless login to ${g_target} is not available. Exiting."
+    fi
+fi
+
+do_gpg_gen_key() {
+
+    local TMP=$(mktemp)
+cat > $TMP <<GPG_EOF
+%echo Generating a standard key
+Key-Type: RSA
+Subkey-Type: RSA
+Name-Real: Local key
+Name-Comment: Local gpg key used to encrypt backups
+Name-Email: $GPG_LOCAL_KEY
+Expire-Date: 0
+# Do a commit here, so that we can later print "done" :-)
+%commit
+%echo done
+GPG_EOF
+
+    gpg --batch --gen-key $TMP
+    rm -f $TMP
+}
+
+do_gpg_check_key() {
+    if ! gpg --list-keys|grep -q $GPG_LOCAL_KEY ;then
+        do_gpg_gen_key    
+    fi
+    }
+
+do_gpg_import_key() {
+    # $1 = key url
+    if ! gpg --list-keys --with-colons | grep -q $GPG_TARGET_KEY; then
+        local TMP=$(mktemp)
+        gpg --keyserver hkp://pgp.mit.edu --recv-key $GPG_TARGET_KEY
+        rm -f TMP
+    fi
+    }
+
+do_gen_exclude_fs() {
+        ### Create exclude list for filesystems
+        >/tmp/fs.excl
+        for i in ${EXCLUDED_FILESYSTEMS}; do
+                mount | grep "type $i" | awk '{print $3"/*"}' >> /tmp/fs.excl
+        done
+        __log "List of excluded filesystems"
+        cat /tmp/fs.excl
+}
+
+__gpg_encrypt_file() {
+    __log "Checking gpg keys"
+    GPG_OPTS=
+    do_gpg_check_key
+    do_gpg_import_key
+
+    if [ "x$2" != "x" ]; then
+        GPG_OPTS="$GPG_OPTS -o $2"
+    fi
+
+    GPG_VER=$(gpg --version|head -n1|awk '{print $3}'|sed -e 's/\.//g' | tr -cd '[[:digit:]]' | cut -c1-3)
+    if [ $GPG_VER -ge 200 ]; then
+        GPG_DAEMON="gpg-agent --daemon"
+    else
+        GPG_DAEMON=""
+        GPG_OPTS="$GPG_OPTS --no-use-agent"
+    fi
+
+    eval $GPG_DAEMON gpg --yes --encrypt $GPG_OPTS --local-user "$GPG_LOCAL_KEY" --recipient "${GPG_TARGET_KEY}" \
+            --hidden-encrypt-to "$GPG_LOCAL_KEY" --trust-model always --compress-algo zlib $1
+}
+
+do_mode_files(){
+# Backup directories
+    IFS=$':'
+    for DIR in $g_dirs; do
+        d_short=$( basename $DIR)
+        if [ ! -z $g_rserver ]; then
+            $g_dummy ssh ${g_rserver} mkdir -p ${g_bkpdir}/$d_short
+        else
+            $g_dummy mkdir -p ${g_bkpdir}/$d_short
+        fi
+
+        do_${g_tool}_files $DIR
+
+    done
+    unset IFS
+}
+
+do_rdiff-backup_files() {
+    DIR=$1
+    echo "Backing up directory $DIR using rdiff-backup"
+    d_short=$( basename $DIR )
+
+    # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
+    if [ "$d_short" = "etc" ]; then
+        mkdir -p /etc/enc
+        __gpg_encrypt_file /etc/passwd /etc/enc/passwd.gpg
+        __gpg_encrypt_file /etc/group /etc/enc/group.gpg
+        __gpg_encrypt_file /etc/shadow /etc/enc/shadow.gpg
+    fi
+    
+    eval $g_dummy $IONICE rdiff-backup ${RDOPTS} $DIR "${g_target}/$d_short"
+
+}
+
+do_duplicity_files() {
+    DIR=$1
+    do_check_vars g_duplicity_proto
+    echo "Backing up directory $DIR using duplicity"
+    d_short=$( basename $DIR )
+    eval $g_dummy $IONICE duplicity \
+        --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
+        $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
+}
+
+
+do_mode_mysql(){
+    # Dumps all databases in the temp directory,
+    # then copies it to target using rdiff-backup
+    if [ ! -z ${MYSQL_PASSWD} ]; then
+        MYOPTS="-p$MYSQL_PASSWD"
+    fi
+
+    MYSQL_VER=$( mysql --version|awk -F" |," '{print $6}'|sed -e 's/\.//g' | tr -cd '[[:digit:]]' | cut -c1-3)
+    if [ $MYSQL_VER -ge 510 ]; then
+        MYDOPTS="$MYOPTS --events"
+    fi
+
+    MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt \
+             --skip-lock-tables --skip-extended-insert"
+
+    # Backup databases to temp dir on target, relies on local .my.cnf
+    # As of MySQL 5.5 two tables are special
+    TMP=$(mktemp -d)
+    DBS=`mysql -u root $MYOPTS --skip-column-names --batch --raw -e "show databases"`
+    __log "Dumping mysql databases: "
+    for i in $DBS; do
+        echo -n "$i >> "
+        if [ "$i" = "information_schema" ]; then
+            eval $g_dummy mysqldump -u root $MYDOPTS --databases $i --result-file="${TMP}/${i}.sql"
+        elif [ "$i" != "performance_schema" ]; then
+            eval $g_dummy $IONICE mysqldump -u root $MYDOPTS \
+                --routines --triggers \
+                --databases $i --result-file="${TMP}/${i}.sql"
+        fi
+    done
+    echo ""
+
+    __log "Put temp database dumps under rdiff-backup control"
+    eval $g_dummy $IONICE rdiff-backup ${TMP} "${g_target}/mysql"
+    rm -rf ${TMP} # Cleanup temporary mysql dir
+}
+
+do_clean_files() {
+    # Clean backups older then -keep on -clean day
+    IFS=$':'
+    for d in $g_dirs; do
+        d_short=$( basename $d )
+        __log "Cleaning up ${g_target}/$d_short"
+        eval $g_dummy rdiff-backup --remove-older-than $g_keep --force "${g_target}/$d_short"
+    done
+}
+
+do_clean_mysql() {
+    __log "Cleaning up ${g_target}/mysql"
+    eval $g_dummy rdiff-backup --remove-older-than $g_keep --force "${g_target}/mysql"
+}
+
+do_mode_systar() {
+    __log "Performing sys tar backup"
+    TMP=$(mktemp -d)
+    ARCH="$TMP/$(hostname)-$(date +%F).tar"
+    yum clean all 
+    do_gen_exclude_fs
+
+    local BKPDIR=$( dirname $ARCH )
+    local TAR_ERR="$LOG_DIR/tar.err.$$"
+    local TAR_STD="$LOG_DIR/tar.std.$$"
+    __log "TAR err: $TAR_ERR"
+
+    eval $g_dummy $IONICE tar -cpvf $ARCH / \
+        --numeric-owner \
+        --exclude="/vz/*" --exclude="/var/www/*" \
+        --exclude="/var/lib/mysql/*" --exclude="/home/*/*" --exclude="/var/vmail/*" \
+        --exclude="$LOG_DIR/*" --exclude="/var/clamav/*" \
+        --exclude="/mnt/*/*" --exclude="/proc/*" \
+        --exclude="/sys/*" --exclude="*swapfile*" \
+        --exclude="/dev/log" --exclude="/var/named/chroot/proc/*" \
+        --exclude="/tmp/*" -X /tmp/fs.excl \
+                2> "$TAR_ERR" 1> "$TAR_STD"
+    __log "Contents of $TAR_ERR"
+    cat "$TAR_ERR"
+    
+
+    __log "Encrypting arch with gpg"
+    # FIXME need to make reciepient configurable
+    __gpg_encrypt_file $ARCH
+
+    if [ "x$TARGET" = "xremote" ]; then
+        ssh ${g_rserver} mkdir -p ${g_bkpdir}
+        scp $ARCH.gpg ${g_rserver}:${g_bkpdir}/
+    else
+        mv $ARCH ${g_bkpdir}/
+    fi
+    rm -rf "$TMP"
+}
+
+do_clean_systar() {
+    :
+}
+
+__log "Starting backup"
+# Main code
+for mode in ${g_mode//:/ }; do
+    __log "Doing modes: $mode"
+    case $mode in
+        files)  g_files=1; do_mode_files ;;
+        mysql)  g_mysql=1; do_mode_mysql ;;
+        systar) g_systar=1; do_mode_systar ;;
+        clean)  g_clean="yes" ;;
+        *)      __log "Unknown mode ignored: $mode"
+    esac
+done
+
+
+if [  "$g_clean" == "yes" -o "`date +%u`" == "$g_clean" ]; then
+    if [ ! -z $g_files ]; then
+        do_clean_files
+    fi
+    if [ ! -z $g_mysql ]; then
+        do_clean_mysql
+    fi
+fi
+
+if [ $ERR -eq 1 ]; then
+    STATUS="ERROR"
+elif [ $ERR -eq 0 ]; then
+    STATUS="SUCCESS"
+else
+    STATUS="UNKNOWN"
+fi
+
+
+__log "Backup complete with status: $STATUS"
+
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=sh fdm=marker
