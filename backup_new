@@ -89,7 +89,7 @@ if [ ${git_sha} != ${file_sha} ]; then
       mv $SCRIPT_DEST /tmp/
       mv $SCRIPT_NAME $SCRIPT_DEST
       chmod 700 $SCRIPT_DEST
-      touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
+      #touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
       exec $SCRIPT_DEST $*
     else
         echo "Error updating - destination not writable"
@@ -308,6 +308,7 @@ __gpg_encrypt_file() {
     GPG_OPTS=
     do_gpg_check_key
     do_gpg_import_key
+    do_check_vars GPG_TARGET_KEY
 
     if [ "x$2" != "x" ]; then
         GPG_OPTS="$GPG_OPTS -o $2"
@@ -349,6 +350,7 @@ do_rdiff-backup_files() {
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
     if [ "$d_short" = "etc" ]; then
+        do_check_vars GPG_TARGET_KEY
         mkdir -p /etc/enc
         __gpg_encrypt_file /etc/passwd /etc/enc/passwd.gpg
         __gpg_encrypt_file /etc/group /etc/enc/group.gpg
@@ -361,14 +363,14 @@ do_rdiff-backup_files() {
 
 do_duplicity_files() {
     DIR=$1
-    do_check_vars g_duplicity_proto
+    do_check_vars g_duplicity_proto GPG_TARGET_KEY
     echo "Backing up directory $DIR using duplicity"
     d_short=$( basename $DIR )
     export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
         --full-if-older-than 20D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
-        ${COMMON_RSYNC_EXCLUDE} \
+        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
 }
