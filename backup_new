@@ -370,7 +370,7 @@ do_duplicity_files() {
     eval $g_dummy $IONICE duplicity \
         --full-if-older-than 20D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
-        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch \
+        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 50 \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
 }
