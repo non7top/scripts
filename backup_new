@@ -9,7 +9,13 @@ SCRIPT_NAME=backup_new
 EXCLUDED_FILESYSTEMS="ocfs nfs cifs smb tmpfs none sysfs procfs devpts bind"
 COMMON_EXCLUDE=""
 
-COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib"
+COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib --batch"
+COMMON_SSH_OPTIONS="-oStrictHostKeyChecking=no -oBatchMode=yes -oConnectTimeout=15"
+COMMON_RSYNC_EXCLUDE="--exclude **/etc/shadow\* --exclude **/etc/passwd\* \
+--exclude **/etc/group\* --exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
+--exclude **/web/stats --exclude **/clients/*/*/tmp \
+--exclude **/mod-tmp/* --exclude **/clients/*/*/log \
+--exclude **/var/named/chroot/var/run/dbus --exclude **/var/named/chroot/proc"
 
 # Includes
 ###############################################################
@@ -62,42 +68,35 @@ function __onexit() {
 ##### Auto-update code{{{
 function autoupdate() {
 
-COMMON_URI="http://non7top.tk/pub/"
-MD5SUM_URI="$COMMON_URI/md5sum"
-SCRIPT_URI="$COMMON_URI/$SCRIPT_NAME"
+GITHUB_REPO="non7top/scripts"
+
+SCRIPT_URI="https://raw.githubusercontent.com/${GITHUB_REPO}/master/${SCRIPT_NAME}"
 SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
 
-TMPDIR=$(mktemp -d -t $SCRIPT_NAME.XXXXXX)
-
 # Checking for update
-cd $TMPDIR
-wget -q $MD5SUM_URI -O md5sum
-#false
-if [ $? -eq 0 ]; then
-  cd $(dirname $SCRIPT_DEST)
-  #echo Checking existing file
-  cat $TMPDIR/md5sum | grep $SCRIPT_NAME | md5sum -c --status
-  if [ $? -eq 1 ]; then
-    echo Attempting update
+
+sha=$(wget https://api.github.com/repos/${GITHUB_REPO}/git/refs -O - -q | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+git_sha=$( wget https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} -O - -q | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
+
+if [ ${git_sha} != ${file_sha} ]; then
+    echo "Update available"
+    TMPDIR=$(mktemp -d -t $SCRIPT_NAME.XXXXXX)
     cd $TMPDIR
-    wget -q $SCRIPT_URI -O $SCRIPT_NAME # Download script to temporary destination
-    echo Checking downloaded file
-    cat $TMPDIR/md5sum | grep $SCRIPT_NAME | md5sum -c --status # Compare what was downloaded to md5sum
-    if [[ $? -eq 0 && \
-        ( -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ) ]]; then
-      echo Updating with new version
+    wget -q "$SCRIPT_URI" -O "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
+    if [[ -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ]]; then
+      echo "Updating with new version"
       mv $SCRIPT_DEST /tmp/
       mv $SCRIPT_NAME $SCRIPT_DEST
       chmod 700 $SCRIPT_DEST
+      touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
       exec $SCRIPT_DEST $*
     else
-        echo "Error updating"
-        echo "Downloaded script doesn't match md5sum or dest not writable"
+        echo "Error updating - destination not writable"
     fi
-  fi
+    rm -rf $TMPDIR
+    cd
 fi
-cd
-rm -rf $TMPDIR
 }
 ##### End auto-update }}}
 
@@ -159,6 +158,8 @@ ERR=0
 trap '__check_status $LINENO' ERR
 trap __onexit EXIT
 set -o errtrace
+
+autoupdate
 
 do_read_config "$CONFIG_FILE"
 
@@ -229,7 +230,8 @@ set_ionice # Enable ionice if possible
 
 ###### RUNTIME VARIABLES ###########
 # For now set default mode to default value
-g_mode="${g_mode:-files:mysql:clean}"
+# FIXME clean
+g_mode="${g_mode:-files:mysql}"
 g_tool="${g_tool:-rdiff-backup}"
 GPG_LOCAL_KEY="$( whoami )@$( hostname -f)"
 #
@@ -246,16 +248,11 @@ else
     __log "Detected remote destination S:$g_rserver D:$g_bkpdir"
 fi
 
-RDOPTS="--exclude **/etc/shadow\* --exclude **/etc/passwd\* \
---exclude **/etc/group\* --exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
---exclude **/web/stats --exclude **/clients/*/*/tmp \
---exclude **/mod-tmp/* --exclude **/clients/*/*/log \
---exclude **/var/named/chroot/var/run/dbus --exclude **/var/named/chroot/proc \
---no-acls"
+RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls"
 
 if [ ! -z $g_rserver ]; then
     # Check passwordless ssh connect to target
-    ssh -o "BatchMode yes" -o ConnectTimeout=15 -o StrictHostKeyChecking=no ${g_rserver} true
+    eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
     if [ $? -ne 0 ]; then
         __die "Passwordless login to ${g_target} is not available. Exiting."
     fi
@@ -334,7 +331,7 @@ do_mode_files(){
     for DIR in $g_dirs; do
         d_short=$( basename $DIR)
         if [ ! -z $g_rserver ]; then
-            $g_dummy ssh ${g_rserver} mkdir -p ${g_bkpdir}/$d_short
+            eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} mkdir -p ${g_bkpdir}/$d_short
         else
             $g_dummy mkdir -p ${g_bkpdir}/$d_short
         fi
@@ -367,8 +364,11 @@ do_duplicity_files() {
     do_check_vars g_duplicity_proto
     echo "Backing up directory $DIR using duplicity"
     d_short=$( basename $DIR )
+    export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
-        --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --full-if-older-than 20D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
+        ${COMMON_RSYNC_EXCLUDE} \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
 }
@@ -392,22 +392,23 @@ do_mode_mysql(){
     # Backup databases to temp dir on target, relies on local .my.cnf
     # As of MySQL 5.5 two tables are special
     TMP=$(mktemp -d)
+    mkdir -p $TMP/mysql
     DBS=`mysql -u root $MYOPTS --skip-column-names --batch --raw -e "show databases"`
     __log "Dumping mysql databases: "
     for i in $DBS; do
         echo -n "$i >> "
         if [ "$i" = "information_schema" ]; then
-            eval $g_dummy mysqldump -u root $MYDOPTS --databases $i --result-file="${TMP}/${i}.sql"
+            eval $g_dummy mysqldump -u root $MYDOPTS --databases $i --result-file="${TMP}/mysql/${i}.sql"
         elif [ "$i" != "performance_schema" ]; then
             eval $g_dummy $IONICE mysqldump -u root $MYDOPTS \
                 --routines --triggers \
-                --databases $i --result-file="${TMP}/${i}.sql"
+                --databases $i --result-file="${TMP}/mysql/${i}.sql"
         fi
     done
     echo ""
 
     __log "Put temp database dumps under rdiff-backup control"
-    eval $g_dummy $IONICE rdiff-backup ${TMP} "${g_target}/mysql"
+    do_${g_tool}_files ${TMP}/mysql
     rm -rf ${TMP} # Cleanup temporary mysql dir
 }
 
@@ -453,11 +454,10 @@ do_mode_systar() {
     
 
     __log "Encrypting arch with gpg"
-    # FIXME need to make reciepient configurable
     __gpg_encrypt_file $ARCH
 
     if [ "x$TARGET" = "xremote" ]; then
-        ssh ${g_rserver} mkdir -p ${g_bkpdir}
+        eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} mkdir -p ${g_bkpdir}
         scp $ARCH.gpg ${g_rserver}:${g_bkpdir}/
     else
         mv $ARCH ${g_bkpdir}/
