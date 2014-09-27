@@ -11,8 +11,7 @@ COMMON_EXCLUDE=""
 
 COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib --batch"
 COMMON_SSH_OPTIONS="-oStrictHostKeyChecking=no -oBatchMode=yes -oConnectTimeout=15"
-COMMON_RSYNC_EXCLUDE="--exclude **/etc/shadow\* --exclude **/etc/passwd\* \
---exclude **/etc/group\* --exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
+COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
 --exclude **/web/stats --exclude **/clients/*/*/tmp \
 --exclude **/mod-tmp/* --exclude **/clients/*/*/log \
 --exclude **/var/named/chroot/var/run/dbus --exclude **/var/named/chroot/proc"
@@ -248,8 +247,6 @@ else
     __log "Detected remote destination S:$g_rserver D:$g_bkpdir"
 fi
 
-RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls"
-
 if [ ! -z $g_rserver ]; then
     # Check passwordless ssh connect to target
     eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
@@ -345,8 +342,10 @@ do_mode_files(){
 
 do_rdiff-backup_files() {
     DIR=$1
-    echo "Backing up directory $DIR using rdiff-backup"
+    __log "Backing up directory $DIR using rdiff-backup"
     d_short=$( basename $DIR )
+    RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls \
+        --exclude **/etc/shadow\* --exclude **/etc/passwd\* --exclude **/etc/group\*"
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
     if [ "$d_short" = "etc" ]; then
@@ -364,13 +363,13 @@ do_rdiff-backup_files() {
 do_duplicity_files() {
     DIR=$1
     do_check_vars g_duplicity_proto GPG_TARGET_KEY
-    echo "Backing up directory $DIR using duplicity"
+    __log "Backing up directory $DIR using duplicity"
     d_short=$( basename $DIR )
     export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
         --full-if-older-than 20D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
-        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 50 \
+        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 200 \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
 }
