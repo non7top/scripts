@@ -367,11 +367,16 @@ do_duplicity_files() {
     d_short=$( basename $DIR )
     export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
-        --full-if-older-than 20D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --full-if-older-than $g_keep --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
         ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 200 \
+        --asynchronous-upload \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
+    eval $g_dummy $IONICE duplicity \
+        remove-older-than $g_keep --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
+        "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
 }
 
 
