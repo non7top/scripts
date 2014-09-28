@@ -160,8 +160,6 @@ set -o errtrace
 
 autoupdate $*
 
-do_read_config "$CONFIG_FILE"
-
 # Parsing Input Parameters {{{
 #####################################################################
 allparams=$*
@@ -208,8 +206,6 @@ echo ${myparams}| grep -i "verbose" > /dev/null && g_verbose=1
 
 ### }}}
 
-do_read_config "$g_config"
-
 if [ x"$g_debug" = "x1" ]; then
     set -xv
 elif [ x"$g_verbose" = "x1" ]; then
@@ -224,12 +220,14 @@ else
     ln -sf "$(basename $LOG_FILE)" "$LOG_DIR/$(basename $0).log"
 fi
 
+do_read_config "$CONFIG_FILE"
+do_read_config "$g_config"
+
 set_lock # Try to obtain backup lock
 set_ionice # Enable ionice if possible
 
 ###### RUNTIME VARIABLES ###########
 # For now set default mode to default value
-# FIXME clean
 g_mode="${g_mode:-files:mysql}"
 g_tool="${g_tool:-rdiff-backup}"
 GPG_LOCAL_KEY="$( whoami )@$( hostname -f)"
@@ -367,7 +365,7 @@ do_duplicity_files() {
     d_short=$( basename $DIR )
     export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
-        --full-if-older-than $g_keep --gpg-options '"${COMMON_GPG_OPTIONS}"' \
+        --full-if-older-than 30D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
         ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 200 \
         --asynchronous-upload \
