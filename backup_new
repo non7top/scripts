@@ -359,6 +359,10 @@ do_rdiff-backup_files() {
 }
 
 do_duplicity_files() {
+
+    do_gpg_check_key
+    do_gpg_import_key
+
     DIR=$1
     do_check_vars g_duplicity_proto GPG_TARGET_KEY
     __log "Backing up directory $DIR using duplicity"
