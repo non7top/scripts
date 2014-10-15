@@ -399,7 +399,7 @@ do_mode_mysql(){
         MYDOPTS="$MYOPTS --events"
     fi
 
-    MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt --all \
+    MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt \
              --skip-lock-tables --skip-extended-insert"
 
     # Backup databases to temp dir on target, relies on local .my.cnf
