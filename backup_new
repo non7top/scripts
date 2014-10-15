@@ -246,10 +246,13 @@ else
 fi
 
 if [ ! -z $g_rserver ]; then
-    # Check passwordless ssh connect to target
-    eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
-    if [ $? -ne 0 ]; then
-        __die "Passwordless login to ${g_target} is not available. Exiting."
+    if [ "$g_tool" = "rdiff-backup" -o \
+        "$g_duplicity_proto" = "sftp" ]; then
+        # Check passwordless ssh connect to target
+        eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
+        if [ $? -ne 0 ]; then
+            __die "Passwordless login to ${g_target} is not available. Exiting."
+        fi
     fi
 fi
 
@@ -327,7 +330,9 @@ do_mode_files(){
     for DIR in $g_dirs; do
         d_short=$( basename $DIR)
         if [ ! -z $g_rserver ]; then
-            eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} mkdir -p ${g_bkpdir}/$d_short
+            if [ "$g_tool" = "rdiff-backup" -o "$g_duplicity_proto" = "sftp" ]; then
+                eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} mkdir -p ${g_bkpdir}/$d_short
+            fi
         else
             $g_dummy mkdir -p ${g_bkpdir}/$d_short
         fi
@@ -371,7 +376,7 @@ do_duplicity_files() {
     eval $g_dummy $IONICE duplicity \
         --full-if-older-than 30D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
-        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 200 \
+        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 25 \
         --asynchronous-upload \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_TARGET_KEY}" \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
@@ -394,7 +399,7 @@ do_mode_mysql(){
         MYDOPTS="$MYOPTS --events"
     fi
 
-    MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt \
+    MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt --all \
              --skip-lock-tables --skip-extended-insert"
 
     # Backup databases to temp dir on target, relies on local .my.cnf
