@@ -374,6 +374,7 @@ do_duplicity_files() {
     d_short=$( basename $DIR )
     export PASSPHRASE=  # do not prompt for passphrase
     eval $g_dummy $IONICE duplicity \
+        --asynchronous-upload \
         --full-if-older-than 30D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
         ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 25 \
