@@ -283,12 +283,15 @@ do_gpg_check_key() {
     }
 
 do_gpg_import_key() {
-    # $1 = key url
-    if ! gpg --list-keys --with-colons | grep -q $GPG_TARGET_KEY; then
-        local TMP=$(mktemp)
-        gpg --keyserver hkp://pgp.mit.edu --recv-key $GPG_TARGET_KEY
-        rm -f TMP
-    fi
+
+    # Support multiple GPG_TARGET_KEY
+    for key in ${GPG_TARGET_KEY}; do
+        if ! gpg --list-keys --with-colons | grep -q $key; then
+            local TMP=$(mktemp)
+            gpg --keyserver hkp://pgp.mit.edu --recv-key $key
+            rm -f TMP
+        fi
+    done
     }
 
 do_gen_exclude_fs() {
@@ -320,7 +323,13 @@ __gpg_encrypt_file() {
         GPG_OPTS="$GPG_OPTS --no-use-agent"
     fi
 
-    eval $GPG_DAEMON gpg --yes --encrypt $GPG_OPTS --local-user "$GPG_LOCAL_KEY" --recipient "${GPG_TARGET_KEY}" \
+    # Support multiple GPG_TARGET_KEY
+    for key in ${GPG_TARGET_KEY}; do
+        GPG_OPTS="${GPG_OPTS} --recipient '${key}'"
+    done
+
+
+    eval $GPG_DAEMON gpg --yes --encrypt $GPG_OPTS --local-user "$GPG_LOCAL_KEY" \
             --hidden-encrypt-to "$GPG_LOCAL_KEY" --trust-model always --compress-algo zlib $1
 }
 
