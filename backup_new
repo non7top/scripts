@@ -73,16 +73,21 @@ SCRIPT_URI="https://raw.githubusercontent.com/${GITHUB_REPO}/master/${SCRIPT_NAM
 SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
 
 # Checking for update
+# Workaround for old ebuntus
+CURL=curl
+if [ -x /usr/local/bin/curl ]; then
+    CURL=/usr/local/bin/curl
+fi
 
-sha=$( curl -sS https://api.github.com/repos/${GITHUB_REPO}/git/refs | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
-git_sha=$( curl -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/refs | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
 file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
 
 if [ ${git_sha} != ${file_sha} ]; then
     echo "Update available"
     TMPDIR=$(mktemp -d -t $SCRIPT_NAME.XXXXXX)
     cd $TMPDIR
-    curl -sS "$SCRIPT_URI" -o "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
+    eval $CURL -sS "$SCRIPT_URI" -o "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
     if [[ -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ]]; then
       echo "Updating with new version"
       mv $SCRIPT_DEST /tmp/
@@ -283,13 +288,10 @@ do_gpg_check_key() {
     }
 
 do_gpg_import_key() {
-
     # Support multiple GPG_TARGET_KEY
     for key in ${GPG_TARGET_KEY}; do
         if ! gpg --list-keys --with-colons | grep -q $key; then
-            local TMP=$(mktemp)
             gpg --keyserver hkp://pgp.mit.edu --recv-key $key
-            rm -f TMP
         fi
     done
     }
