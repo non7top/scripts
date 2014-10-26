@@ -391,11 +391,10 @@ do_duplicity_files() {
     done
 
     eval $g_dummy $IONICE duplicity \
-        --asynchronous-upload \
+        --asynchronous-upload --verbosity warning \
         --full-if-older-than 30D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
         ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 25 \
-        --asynchronous-upload \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" ${DUPLICITY_OPTS} \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
     eval $g_dummy $IONICE duplicity \
