@@ -12,9 +12,9 @@ COMMON_EXCLUDE=""
 COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib --batch"
 COMMON_SSH_OPTIONS="-oStrictHostKeyChecking=no -oBatchMode=yes -oConnectTimeout=15"
 COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
---exclude **/web/stats --exclude **/clients/*/*/tmp \
---exclude **/mod-tmp/* --exclude **/clients/*/*/log \
---exclude **/var/named/chroot/var/run/dbus --exclude **/var/named/chroot/proc"
+--exclude '**/web/stats' --exclude '**/clients/*/*/tmp' \
+--exclude '**/mod-tmp/*' --exclude '**/clients/*/*/log' \
+--exclude '**/var/named/chroot/var/run/dbus' --exclude '**/var/named/chroot/proc'"
 
 # Includes
 ###############################################################
