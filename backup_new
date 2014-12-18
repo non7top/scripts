@@ -397,7 +397,7 @@ do_duplicity_files() {
         ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 25 \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" ${DUPLICITY_OPTS} \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
-    eval $g_dummy $IONICE duplicity \
+    eval $g_dummy $IONICE duplicity --force \
         remove-older-than $g_keep --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
         "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
