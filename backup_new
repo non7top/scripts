@@ -337,8 +337,9 @@ __gpg_encrypt_file() {
 
 do_mode_files(){
 # Backup directories
-    IFS=$':'
-    for DIR in $g_dirs; do
+    #IFS=$':'
+    g_dirs2=${g_dirs//:/ }
+    for DIR in $g_dirs2; do
         d_short=$( basename $DIR)
         if [ ! -z $g_rserver ]; then
             if [ "$g_tool" = "rdiff-backup" -o "$g_duplicity_proto" = "sftp" ]; then
@@ -351,7 +352,7 @@ do_mode_files(){
         do_${g_tool}_files $DIR
 
     done
-    unset IFS
+    #unset IFS
 }
 
 do_rdiff-backup_files() {
@@ -444,8 +445,9 @@ do_mode_mysql(){
 
 do_clean_files() {
     # Clean backups older then -keep on -clean day
-    IFS=$':'
-    for d in $g_dirs; do
+    #IFS=$':'
+    g_dirs2=${g_dirs//:/ }
+    for d in $g_dirs2; do
         d_short=$( basename $d )
         __log "Cleaning up ${g_target}/$d_short"
         eval $g_dummy rdiff-backup --remove-older-than $g_keep --force "${g_target}/$d_short"
