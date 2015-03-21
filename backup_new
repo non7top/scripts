@@ -372,6 +372,7 @@ do_rdiff-backup_files() {
     fi
     
     eval $g_dummy $IONICE rdiff-backup ${RDOPTS} $DIR "${g_target}/$d_short"
+    eval $g_dummy $IONICE rdiff-backup --remove-older-than $g_keep --force "${g_target}/$d_short"
 
 }
 
@@ -395,7 +396,7 @@ do_duplicity_files() {
         --asynchronous-upload --verbosity warning \
         --full-if-older-than 30D --gpg-options '"${COMMON_GPG_OPTIONS}"' \
         --ssh-backend pexpect --ssh-options '"${COMMON_SSH_OPTIONS}"' \
-        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 25 \
+        ${COMMON_RSYNC_EXCLUDE} --allow-source-mismatch --volsize 100 \
         --encrypt-key "${GPG_LOCAL_KEY}" --hidden-encrypt-key "${GPG_LOCAL_KEY}" ${DUPLICITY_OPTS} \
         $DIR "${g_duplicity_proto}://${g_rserver}/${g_bkpdir}/$d_short"
     eval $g_dummy $IONICE duplicity --force \
