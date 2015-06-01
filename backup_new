@@ -56,7 +56,7 @@ __check_status() {
 }
 
 function __onexit() {
-    if [ $ERR -eq 1 ]; then
+    if [ $ERR -eq 1 -a $g_verbose -eq 0 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" root
     fi
 }
@@ -66,6 +66,7 @@ function __onexit() {
 
 ##### Auto-update code{{{
 function autoupdate() {
+pushd $PWD >/dev/null 2>&1
 
 GITHUB_REPO="non7top/scripts"
 
@@ -99,8 +100,8 @@ if [ ${git_sha} != ${file_sha} ]; then
         echo "Error updating - destination not writable"
     fi
     rm -rf $TMPDIR
-    cd
 fi
+popd >/dev/null 2>&1
 }
 ##### End auto-update }}}
 
@@ -139,7 +140,7 @@ function set_lock() {
 
 # readConfig() was auto-included from '/../functions/readConfig.sh' by make.sh
 do_read_config() {
-    CONFIG_FILE="$1"
+    local CONFIG_FILE="$1"
     if [ -z $CONFIG_FILE ]; then
         return
     fi
@@ -163,7 +164,9 @@ trap '__check_status $LINENO' ERR
 trap __onexit EXIT
 set -o errtrace
 
-autoupdate $*
+if ! echo $* | grep -q skip_update ; then
+    autoupdate $*
+fi
 
 # Parsing Input Parameters {{{
 #####################################################################
@@ -186,7 +189,8 @@ do
     clean=*)        g_clean=`echo $arg | sed 's/clean=//g'`     ;; # Day when clean
     mode=*)         g_mode=`echo $arg | sed 's/mode=//g'`       ;; # What to do
     config=*)       g_config=`echo $arg | sed 's/config=//g'`   ;; # Config file
-    tool=*)         g_tool=`echo $arg | sed 's/tool=//g'`       ;; # Tool used to backup files (duplicity/rdiff-backup)
+    tool=*)         g_tool=`echo $arg | sed 's/tool=//g'`       ;; # Tool used to backup files (duplicity/rdiff-backup/7z)
+    databases=*)    g_databases=`echo $arg | sed 's/databases=//g'`     ;; # backup these databases, separate with :, leave empty to dump all
     duplicity_proto=*)   g_duplicity_proto=`echo $arg | sed 's/duplicity_proto=//g'`       ;; # sftp/ftp or whatever is supported
     # Valid modes: mysql,fiels(tar,rsnapshot)
     # mysql will store under $target/mysql with rdiff-backup
@@ -199,6 +203,7 @@ do
     n|dryrun)       myparams="$myparams dryrun"                 ;;
     d|debug)        myparams="$myparams debug"                  ;;
     v|verbose)      myparams="$myparams verbose"                ;;
+    s|skip_update)  myparams="$myparams skip_update"            ;;
     *)              echo "$0: unrecognized action specified $arg" ; exit 1 ;;
   esac
   shift
@@ -208,8 +213,12 @@ echo ${myparams}| grep -i "help"   > /dev/null && do_help
 echo ${myparams}| grep -i "dryrun" > /dev/null && g_dummy="echo"
 echo ${myparams}| grep -i "debug" > /dev/null && g_debug=1
 echo ${myparams}| grep -i "verbose" > /dev/null && g_verbose=1
+echo ${myparams}| grep -i "skip_update" > /dev/null && g_skip_update=1
 
 ### }}}
+
+g_config=$( readlink -f "$g_config" )
+do_read_config "$g_config"
 
 if [ x"$g_debug" = "x1" ]; then
     set -xv
@@ -226,7 +235,6 @@ else
 fi
 
 do_read_config "$CONFIG_FILE"
-do_read_config "$g_config"
 
 set_lock # Try to obtain backup lock
 set_ionice # Enable ionice if possible
@@ -425,7 +433,16 @@ do_mode_mysql(){
     # As of MySQL 5.5 two tables are special
     TMP=$(mktemp -d)
     mkdir -p $TMP/mysql
-    DBS=`mysql -u root $MYOPTS --skip-column-names --batch --raw -e "show databases"`
+
+    if [ "x${g_databases}" == "x" ]; then
+        # Backup all
+        __log "Backing up all databases"
+        DBS=`mysql -u root $MYOPTS --skip-column-names --batch --raw -e "show databases"`
+    else
+        # Backup those specified on command line
+        DBS=${g_databases//:/ }
+    fi
+
     __log "Dumping mysql databases: "
     for i in $DBS; do
         echo -n "$i >> "
