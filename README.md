@@ -3,4 +3,4 @@ scripts
 
 Install with
 
-```wget https://github.com/non7top/scripts/blob/master/backup_new -q -O-|bash -s```
+```wget https://raw.githubusercontent.com/non7top/scripts/master/backup_new --no-check-certificate -q -O-|bash -s```
