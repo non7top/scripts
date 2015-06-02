@@ -56,7 +56,7 @@ __check_status() {
 }
 
 function __onexit() {
-    if [ $ERR -eq 1 -a $g_verbose -eq 0 ]; then
+    if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" root
     fi
 }
@@ -217,8 +217,10 @@ echo ${myparams}| grep -i "skip_update" > /dev/null && g_skip_update=1
 
 ### }}}
 
-g_config=$( readlink -f "$g_config" )
-do_read_config "$g_config"
+if [ ! -z $g_config ]; then
+    g_config=$( readlink -f "$g_config" )
+    do_read_config "$g_config"
+fi
 
 if [ x"$g_debug" = "x1" ]; then
     set -xv
