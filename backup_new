@@ -429,7 +429,7 @@ do_mode_mysql(){
     fi
 
     MYDOPTS="$MYDOPTS --flush-privileges --flush-logs --opt \
-             --skip-lock-tables --skip-extended-insert"
+             --skip-lock-tables --skip-extended-insert --no-create-db"
 
     # Backup databases to temp dir on target, relies on local .my.cnf
     # As of MySQL 5.5 two tables are special
