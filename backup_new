@@ -117,12 +117,12 @@ file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) 
 
 if [ ${git_sha} != ${file_sha} ]; then
     echo "Update available"
-    TMPDIR=$(mktemp -d -t $SCRIPT_NAME.XXXXXX)
+    TMPDIR=$(mktemp -d -t $SCRIPT_NAME_up.XXXXXX)
     cd $TMPDIR
     eval $CURL -sS "$SCRIPT_URI" -o "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
     if [[ -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ]]; then
       echo "Updating with new version"
-      mv $SCRIPT_DEST /tmp/
+      #mv $SCRIPT_DEST /tmp/
       mv $SCRIPT_NAME $SCRIPT_DEST
       chmod 700 $SCRIPT_DEST
       #touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
@@ -130,7 +130,7 @@ if [ ${git_sha} != ${file_sha} ]; then
     else
         echo "Error updating - destination not writable"
     fi
-    rm -rf $TMPDIR
+    #rm -rf $TMPDIR
 fi
 popd >/dev/null 2>&1
 }
