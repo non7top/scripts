@@ -93,7 +93,16 @@ pushd $PWD >/dev/null 2>&1
 GITHUB_REPO="non7top/scripts"
 
 SCRIPT_URI="https://raw.githubusercontent.com/${GITHUB_REPO}/master/${SCRIPT_NAME}"
-SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
+
+SCRIPT_DEST=$( readlink -f $0 )
+if [ ! -w $SCRIPT_DEST ]; then
+    ID=$( id -u)
+    if [ ${ID} -eq 0 ]; then
+        SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
+    else
+        SCRIPT_DEST=$HOME/bin/$SCRIPT_NAME
+    fi
+fi
 
 # Checking for update
 # Workaround for old ebuntus
