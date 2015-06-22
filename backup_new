@@ -158,11 +158,11 @@ function set_lock() {
 
     NAME=${1:-backup}
     # Try to obtain backup lock
-    mkdir -p /var/lock/subsys
-    exec 8>/var/lock/subsys/${NAME}
+    #mkdir -p /var/lock/subsys
+    exec 8>$HOME/.lock_${NAME}
     if ! flock -n -x 8; then
         __log "Backup is already running or obtaining"
-        __log "/var/lock/subsys/${NAME} lock failed"
+        __log "$HOME/.lock_${NAME} lock failed"
         exit 1
     fi
 
