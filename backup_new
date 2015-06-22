@@ -16,6 +16,28 @@ COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_
 --exclude '**/mod-tmp/*' --exclude '**/clients/*/*/log' \
 --exclude '**/var/named/chroot/var/run/dbus' --exclude '**/var/named/chroot/proc'"
 
+LOG_DIR=/var/log/backup/$(basename $0)
+LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
+
+
+fd=0   # stdin
+
+#  As we recall, the -t test option checks whether the stdin, [ -t 0 ],
+#+ or stdout, [ -t 1 ], in a given script is running in a terminal.
+if [ ! -t "$fd" ]; then
+    #non interactive
+
+    mkdir -p "${LOG_DIR}" || echo "Cannot create $LOG_DIR. Exiting."
+    touch "${LOG_FILE}" || echo "Cannot create $LOG_FILE. Exiting."
+
+    # Redirect all output to log file
+    #exec > >(tee "$LOG_FILE") 2>&1
+    exec > $LOG_FILE 2>&1
+    ln -sf "$(basename $LOG_FILE)" "$LOG_DIR/$(basename $0).log"
+
+fi
+
+
 # Includes
 ###############################################################
 
@@ -57,7 +79,7 @@ __check_status() {
 
 function __onexit() {
     if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
-        cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" root
+        cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $USER
     fi
 }
 
@@ -153,11 +175,6 @@ do_read_config() {
 }
 
 
-
-LOG_DIR=/var/log/backup/$(basename $0)
-LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
-
-
 ERR=0
 
 trap '__check_status $LINENO' ERR
@@ -224,16 +241,6 @@ fi
 
 if [ x"$g_debug" = "x1" ]; then
     set -xv
-elif [ x"$g_verbose" = "x1" ]; then
-    :
-else
-    mkdir -p "${LOG_DIR}" || __die "Cannot create $LOG_DIR. Exiting."
-    touch "${LOG_FILE}" || __die "Cannot create $LOG_FILE. Exiting."
-
-    # Redirect all output to log file
-    #exec > >(tee "$LOG_FILE") 2>&1
-    exec > $LOG_FILE 2>&1
-    ln -sf "$(basename $LOG_FILE)" "$LOG_DIR/$(basename $0).log"
 fi
 
 do_read_config "$CONFIG_FILE"
@@ -369,7 +376,7 @@ do_rdiff-backup_files() {
     DIR=$1
     __log "Backing up directory $DIR using rdiff-backup"
     d_short=$( basename $DIR )
-    RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls \
+    RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls --print-statistics \
         --exclude **/etc/shadow\* --exclude **/etc/passwd\* --exclude **/etc/group\*"
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
