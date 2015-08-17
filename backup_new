@@ -78,6 +78,9 @@ __check_status() {
 }
 
 function __onexit() {
+    if [ ! -z WATCHDOG_PID ]; then
+        __stop_watchdog
+    fi
     if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $USER
     fi
@@ -126,6 +129,7 @@ if [ ${git_sha} != ${file_sha} ]; then
       mv $SCRIPT_NAME $SCRIPT_DEST
       chmod 700 $SCRIPT_DEST
       #touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
+      popd >/dev/null 2>&1
       exec $SCRIPT_DEST $*
     else
         echo "Error updating - destination not writable"
@@ -184,10 +188,100 @@ do_read_config() {
 }
 
 
+# watchdog() was auto-included from '/../functions/watchdog.sh' by make.sh
+
+########
+# Add this to main script
+# trap '__exit' TERM INT
+# function __exit() {
+#    __stop_watchdog
+#    exit 0
+# }
+
+# usage:
+# __start_watchdog $$ $RUN_TIME 5
+# first parameters defaults to $$
+# second defaults to 1 hour (sane default) - maximum expected run time
+# thrid parameter defaults to 1 hour - interval between alerts
+
+
+function __start_watchdog() {
+    local WATCH_PROC=${1:-$$}
+    local MAX_TIME=${2:-3600}
+    local SLEEP=2
+    local CUR_TIME=0
+    local ALERT_TIME=${3:-3600} # 30 minutes
+    local NEXT_ALERT=$(( $MAX_TIME + $ALERT_TIME )) # first alert goes after previous run time + alert time
+
+    echo ">> Watchdog: Starting watchdog for pid=$WATCH_PROC MAX_TIME=$MAX_TIME ALERT_TIME=$ALERT_TIME"
+
+    (
+    trap 'exit 0' TERM
+    while kill -0 $WATCH_PROC
+    do
+        sleep $SLEEP
+        CUR_TIME=$(( $CUR_TIME + $SLEEP ))
+        if [ $CUR_TIME -gt $MAX_TIME ]; then
+            if [ $CUR_TIME -gt $NEXT_ALERT ]; then
+                echo ">> Watchdog: the script $0 is running more than previous time (>$MAX_TIME sec)"
+                # Sending mail alert
+                cat -v $LOG_FILE | mail -s "WARN - [backup_new] $(hostname) - $(date) - Running too long" $USER
+
+                NEXT_ALERT=$(( $CUR_TIME + $ALERT_TIME ))
+            fi
+        fi
+    done
+    ) &
+    export WATCHDOG_PID=$!
+    __log "Started watchdog with PID=$WATCHDOG_PID"
+}
+
+
+function __stop_watchdog() {
+    if [ x"$WATCHDOG_PID" != x ]
+    then
+        __log "Stopping watchdog PID=$WATCHDOG_PID"
+        kill -s SIGTERM $WATCHDOG_PID
+        wait
+    fi
+    unset WATCHDOG_PID
+}
+
+
+# runTime() was auto-included from '/../functions/runTime.sh' by make.sh
+# usage
+# RUN_TIME=$( __load_run_time [key] )
+# __save_run_time [key]
+# key is some string
+
+BASE=$HOME/.local/$(basename $0)
+mkdir -p $BASE
+
+function __save_run_time() {
+    local self_name=$(basename $0)
+    local key=${1:-$self_name}
+    local _time=$BASE/${key}.time
+
+    echo $SECONDS > $_time
+    }
+
+function __load_run_time() {
+    local self_name=$(basename $0)
+    local key=${1:-$self_name}
+    local _time=$BASE/${key}.time
+
+    if [ -f $_time ]; then
+        cat $_time
+    else
+        echo 7200 # sane defaults to 2 hours
+    fi
+}
+
+
 ERR=0
 
 trap '__check_status $LINENO' ERR
-trap __onexit EXIT
+trap __onexit EXIT INT
 set -o errtrace
 
 if ! echo $* | grep -q skip_update ; then
@@ -254,8 +348,13 @@ fi
 
 do_read_config "$CONFIG_FILE"
 
-set_lock # Try to obtain backup lock
+set_lock || ERR=1 # Try to obtain backup lock
 set_ionice # Enable ionice if possible
+
+RUN_TIME=$( __load_run_time $( echo "$g_target" | md5sum | awk '{print $1}' ) )
+__log "Loaded run time of previous run: $RUN_TIME seconds"
+__start_watchdog $$ $RUN_TIME
+
 
 ###### RUNTIME VARIABLES ###########
 # For now set default mode to default value
@@ -568,6 +667,8 @@ else
     STATUS="UNKNOWN"
 fi
 
+__save_run_time $( echo "$g_target" | md5sum | awk '{print $1}' )
+__stop_watchdog
 
 __log "Backup complete with status: $STATUS"
 
