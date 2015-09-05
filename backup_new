@@ -221,7 +221,7 @@ function __start_watchdog() {
     do
         sleep $SLEEP
         CUR_TIME=$(( $CUR_TIME + $SLEEP ))
-        if [ $CUR_TIME -gt $MAX_TIME ]; then
+        if [ $CUR_TIME -gt $MAX_TIME -a $CUR_TIME -gt $NEXT_ALERT ]; then
             if [ $CUR_TIME -gt $NEXT_ALERT ]; then
                 echo ">> Watchdog: the script $0 is running more than previous time (>$MAX_TIME sec)"
                 # Sending mail alert
