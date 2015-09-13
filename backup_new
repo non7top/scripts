@@ -81,7 +81,8 @@ function __onexit() {
     if [ ! -z WATCHDOG_PID ]; then
         __stop_watchdog
     fi
-    if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
+    #if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
+    if [ $ERR -eq 1 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $USER
     fi
 }
@@ -379,7 +380,8 @@ if [ ! -z $g_rserver ]; then
     if [ "$g_tool" = "rdiff-backup" -o \
         "$g_duplicity_proto" = "sftp" ]; then
         # Check passwordless ssh connect to target
-        eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
+        #eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} true
+        eval ssh -oStrictHostKeyChecking=no -oConnectTimeout=15 -oPasswordAuthentication=no ${g_rserver} true
         if [ $? -ne 0 ]; then
             __die "Passwordless login to ${g_target} is not available. Exiting."
         fi
