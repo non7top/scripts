@@ -14,10 +14,14 @@ COMMON_SSH_OPTIONS="-oStrictHostKeyChecking=no -oBatchMode=yes -oConnectTimeout=
 COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
 --exclude '**/web/stats' --exclude '**/clients/*/*/tmp' \
 --exclude '**/mod-tmp/*' --exclude '**/clients/*/*/log' \
---exclude '**/var/named/chroot/var/run/dbus' --exclude '**/var/named/chroot/proc'"
+--exclude '**/var/named/chroot/var/run/dbus' \
+--exclude '**/var/named/chroot/proc' \
+--exclude '**/var/run/mod_fcgid/*'  \
+--exclude '**/var/spool/postfix/*/*' "
 
 LOG_DIR=/var/log/backup/$(basename $0)
 LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
+BACKUP_DATE="$(date +'%F_%H-%M-%S')"
 
 
 fd=0   # stdin
@@ -312,6 +316,7 @@ do
     config=*)       g_config=`echo $arg | sed 's/config=//g'`   ;; # Config file
     tool=*)         g_tool=`echo $arg | sed 's/tool=//g'`       ;; # Tool used to backup files (duplicity/rdiff-backup/7z)
     databases=*)    g_databases=`echo $arg | sed 's/databases=//g'`     ;; # backup these databases, separate with :, leave empty to dump all
+    retention=*)    g_retention=`echo $arg | sed 's/retention=//g'`     ;; # keep this number of backups, defaults to 5
     duplicity_proto=*)   g_duplicity_proto=`echo $arg | sed 's/duplicity_proto=//g'`       ;; # sftp/ftp or whatever is supported
     # Valid modes: mysql,fiels(tar,rsnapshot)
     # mysql will store under $target/mysql with rdiff-backup
@@ -325,16 +330,19 @@ do
     d|debug)        myparams="$myparams debug"                  ;;
     v|verbose)      myparams="$myparams verbose"                ;;
     s|skip_update)  myparams="$myparams skip_update"            ;;
+    i|insecure_etc) myparams="$myparams insecure_etc"           ;;
     *)              echo "$0: unrecognized action specified $arg" ; exit 1 ;;
   esac
   shift
 done
 
+g_insecure_etc=0
 echo ${myparams}| grep -i "help"   > /dev/null && do_help
 echo ${myparams}| grep -i "dryrun" > /dev/null && g_dummy="echo"
 echo ${myparams}| grep -i "debug" > /dev/null && g_debug=1
 echo ${myparams}| grep -i "verbose" > /dev/null && g_verbose=1
 echo ${myparams}| grep -i "skip_update" > /dev/null && g_skip_update=1
+echo ${myparams}| grep -i "insecure_etc" > /dev/null && g_insecure_etc=1
 
 ### }}}
 
@@ -361,14 +369,15 @@ __start_watchdog $$ $RUN_TIME
 # For now set default mode to default value
 g_mode="${g_mode:-files:mysql}"
 g_tool="${g_tool:-rdiff-backup}"
+g_retention="${g_retention:-5}" # by default keep 5 backups
 GPG_LOCAL_KEY="$( whoami )@$( hostname -f)"
 #
 ####################################
 
 # Check if TARGET is remote (user@server::dir) or local location
 if ! echo $g_target | grep -q "::" ;then
-    __log "Detected local destination"
     g_bkpdir=$g_target
+    __log "Detected local destination $g_bkpdir"
 else
     g_bkpdir=$(echo "$g_target" | cut -d: -f3 )
     g_rserver=$(echo "$g_target" | cut -d: -f1 )
@@ -482,6 +491,26 @@ do_mode_files(){
     #unset IFS
 }
 
+do_tar_files() {
+    DIR=$1
+    case compress in
+        *|gz) suffix=".gz";compress="gz" ;;
+        xz) suffix=".xz" ;;
+        bz2) suffix=".bz2" ;;
+        no) suffix="" ;;
+    esac
+    __log "Selected compression $compress for tar"
+    d_short=$( basename $DIR)
+    DEST_DIR=$g_bkpdir/$BACKUP_DATE
+    DEST_TAR=$DEST_DIR/$d_short-$BACKUP_DATE.tar${suffix}
+    mkdir -p $DEST_DIR
+
+    __log "Backup destination $DEST_TAR"
+    echo $1 $g_bkpdir $DEST_TAR
+    cd "$DIR" && tar cpf $DEST_TAR .
+    __log "Tar exit code: $?"
+}
+
 do_rdiff-backup_files() {
     DIR=$1
     __log "Backing up directory $DIR using rdiff-backup"
@@ -491,6 +520,11 @@ do_rdiff-backup_files() {
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
     if [ "$d_short" = "etc" ]; then
+        mkdir -p /etc/.backup_new
+        # Copy crontabs
+        mkdir -p /etc/.backup_new/var_spool_cron
+        rsync -a /var/spool/cron/ /etc/.backup_new/var_spool_cron/
+
         do_check_vars GPG_TARGET_KEY
         mkdir -p /etc/enc
         __gpg_encrypt_file /etc/passwd /etc/enc/passwd.gpg
@@ -616,6 +650,8 @@ do_mode_systar() {
         --exclude="/mnt/*/*" --exclude="/proc/*" \
         --exclude="/sys/*" --exclude="*swapfile*" \
         --exclude="/dev/log" --exclude="/var/named/chroot/proc/*" \
+        --exclude="**/var/run/mod_fcgid/*"  \
+        --exclude="**/var/spool/postfix/*/*" \
         --exclude="/tmp/*" -X /tmp/fs.excl \
                 2> "$TAR_ERR" 1> "$TAR_STD"
     __log "Contents of $TAR_ERR"
@@ -635,6 +671,13 @@ do_mode_systar() {
 }
 
 do_clean_systar() {
+    __log "Cleaning old backups with retention ${g_retention}"
+    if [ "x$TARGET" = "xremote" ]; then
+        DELETE=$( eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} "ls -d1 ${g_bkpdir}/*"|head -n -${g_retention} )
+        eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} "rm -f $DELETE"
+    else
+        : # local stuff
+    fi
     :
 }
 
@@ -653,12 +696,7 @@ done
 
 
 if [  "$g_clean" == "yes" -o "`date +%u`" == "$g_clean" ]; then
-    if [ ! -z $g_files ]; then
-        do_clean_files
-    fi
-    if [ ! -z $g_mysql ]; then
-        do_clean_mysql
-    fi
+    do_clean_$mode
 fi
 
 if [ $ERR -eq 1 ]; then
