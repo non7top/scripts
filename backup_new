@@ -681,6 +681,10 @@ do_clean_systar() {
     :
 }
 
+do_clean_clean() {
+    : #stub
+}
+
 __log "Starting backup"
 # Main code
 for mode in ${g_mode//:/ }; do
@@ -696,6 +700,7 @@ done
 
 
 if [  "$g_clean" == "yes" -o "`date +%u`" == "$g_clean" ]; then
+    __log "Running do_clean_$mode"
     do_clean_$mode
 fi
 
