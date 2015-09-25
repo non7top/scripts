@@ -317,6 +317,8 @@ do
     tool=*)         g_tool=`echo $arg | sed 's/tool=//g'`       ;; # Tool used to backup files (duplicity/rdiff-backup/7z)
     databases=*)    g_databases=`echo $arg | sed 's/databases=//g'`     ;; # backup these databases, separate with :, leave empty to dump all
     retention=*)    g_retention=`echo $arg | sed 's/retention=//g'`     ;; # keep this number of backups, defaults to 5
+    script=*)       g_script=`echo $arg | sed 's/script=//g'`   ;; # absolute path to script
+    script_opts=*)  g_script_opts=`echo $arg | sed 's/script_opts=//g'`   ;; # options ofr script
     duplicity_proto=*)   g_duplicity_proto=`echo $arg | sed 's/duplicity_proto=//g'`       ;; # sftp/ftp or whatever is supported
     # Valid modes: mysql,fiels(tar,rsnapshot)
     # mysql will store under $target/mysql with rdiff-backup
@@ -683,6 +685,16 @@ do_clean_systar() {
     set +x
 }
 
+do_mode_script() {
+    __log "Running external script $g_script $script_opts"
+    eval $g_dummy $IONICE $g_script $script_opts
+    __log "Script exit code: $?"
+}
+
+do_clean_script() {
+    : #stub
+}
+
 do_clean_clean() {
     : #stub
 }
@@ -695,6 +707,7 @@ for mode in ${g_mode//:/ }; do
         files)  g_files=1; do_mode_files ;;
         mysql)  g_mysql=1; do_mode_mysql ;;
         systar) g_systar=1; do_mode_systar ;;
+        script) g_script=1; do_mode_script ;;
         clean)  g_clean="yes"; continue ;;
         *)      __log "Unknown mode ignored: $mode"
     esac
@@ -712,6 +725,9 @@ fi
 
 __save_run_time $( echo "$g_target" | md5sum | awk '{print $1}' )
 __stop_watchdog
+
+__log "Clean log dir"
+find "$LOG_DIR" -mtime +60 | xargs -n3 rm -f
 
 __log "Backup complete with status: $STATUS"
 
