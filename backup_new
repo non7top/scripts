@@ -707,7 +707,7 @@ for mode in ${g_mode//:/ }; do
         files)  g_files=1; do_mode_files ;;
         mysql)  g_mysql=1; do_mode_mysql ;;
         systar) g_systar=1; do_mode_systar ;;
-        script) g_script=1; do_mode_script ;;
+        script) do_mode_script ;;
         clean)  g_clean="yes"; continue ;;
         *)      __log "Unknown mode ignored: $mode"
     esac
