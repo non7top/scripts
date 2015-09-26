@@ -26,6 +26,7 @@ process_rule() {
     FILE=$1
     RULE_NAME=$2
     eval $( cat $FILE | grep GENERATOR=  )
+    GENERATOR=${GENERATOR:-simple_input}
     #echo processing $FILE $RULE_NAME with $GENERATOR
     generators/$GENERATOR $FILE $RULE_NAME
 }
