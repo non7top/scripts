@@ -1,0 +1,2 @@
+GENERATOR=simple_input
+ACTION="LOG --log-prefix 'iptables: in_drop: ' --log-level 7"

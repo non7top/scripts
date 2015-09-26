@@ -1,0 +1,6 @@
+GENERATOR=simple_input
+STATE=NEW
+MATCH=tcp
+PORT=3000
+COMMENT="allow openvz web panel"
+ACTION=ACCEPT

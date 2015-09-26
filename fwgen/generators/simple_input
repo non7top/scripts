@@ -1,0 +1,49 @@
+#!/bin/bash
+FILE=$1
+NAME=${2:-INPUT}
+source $FILE
+
+#echo "# included from file $FILE"
+
+LINE="-A $NAME"
+if [ "x$STATE" != "x" ]; then
+    LINE="$LINE -m state --state $STATE"
+fi
+
+if [ "x$DST" != "x" ]; then
+    LINE="$LINE -d $DST"
+fi
+
+if [ "x$SRC" != "x" ]; then
+    LINE="$LINE -s $SRC"
+fi
+
+if [ "x$OUT" != "x" ]; then
+    LINE="$LINE -o $OUT"
+fi
+
+if [ "x$IN" != "x" ]; then
+    LINE="$LINE -i $IN"
+fi
+
+if [ "x$PROTO" != "x" ]; then
+    LINE="$LINE -p $PROTO"
+fi
+
+case "$MATCH" in
+    tcp)    LINE="$LINE -p tcp -m tcp";;
+    udp)    LINE="$LINE -p udp -m udp";;
+esac
+
+if [ "x$PORT" != "x" ]; then
+    LINE="$LINE --dport $PORT"
+fi
+
+
+if [ "x$COMMENT" != "x" ]; then
+    LINE="$LINE -m comment --comment '$COMMENT'"
+fi
+
+LINE="$LINE -j $ACTION"
+
+echo $LINE

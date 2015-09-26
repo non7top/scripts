@@ -1,0 +1,6 @@
+GENERATOR=simple_input
+MATCH=tcp
+PORT=10080
+DST=8.8.8.8
+COMMENT="forward http to ve111"
+ACTION="DNAT --to-destination 192.168.10.11:80"

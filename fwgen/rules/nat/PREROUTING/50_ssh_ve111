@@ -1,0 +1,6 @@
+GENERATOR=simple_input
+MATCH=tcp
+PORT=10022
+DST=8.8.8.8
+COMMENT="forward ssh to ve111"
+ACTION="DNAT --to-destination 192.168.10.11:22"

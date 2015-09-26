@@ -1,0 +1,6 @@
+GENERATOR=simple_input
+STATE=NEW
+MATCH=tcp
+PORT=22
+COMMENT="allow local ssh"
+ACTION=ACCEPT

@@ -1,0 +1,5 @@
+GENERATOR=simple_input
+MATCH=udp
+PORT=44450:44500
+COMMENT="allow tracepath"
+ACTION="REJECT --reject-with 'icmp-port-unreachable'"
