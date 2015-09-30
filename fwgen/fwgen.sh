@@ -1,7 +1,7 @@
 #!/bin/bash
 
-D=$1
-[ -d $D ] && cd $D
+D=${1:-/etc/fwgen/rules}
+[ -d $D ] && cd $D || { echo "Rules directory $D not found."; exit 1; }
 
 process_dir() {
     DIR=$1
