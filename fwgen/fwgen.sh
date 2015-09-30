@@ -16,6 +16,7 @@ process_dir() {
         elif [ -d $rule ]; then
             RULE_NAME=$( basename $rule )
             RULE_NAME=$( echo $RULE_NAME|sed -e 's/[0-9]*_//' )
+            echo "-N $RULE_NAME"
             echo "-A INPUT -j $RULE_NAME"
             process_dir $rule $RULE_NAME
         fi

@@ -41,7 +41,7 @@ fi
 
 
 if [ "x$COMMENT" != "x" ]; then
-    LINE="$LINE -m comment --comment '$COMMENT'"
+    LINE="$LINE -m comment --comment \"$COMMENT\""
 fi
 
 LINE="$LINE -j $ACTION"
