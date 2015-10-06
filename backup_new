@@ -676,7 +676,7 @@ do_clean_systar() {
     __log "Cleaning old backups with retention ${g_retention}"
     set -x
     if [ "x$TARGET" = "xremote" ]; then
-        DELETE=$( eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} "ls -d1 ${g_bkpdir}/*"|head -n -${g_retention} )
+        DELETE=$( eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} "ls -d1 ${g_bkpdir}/*"|head -n -${g_retention} | tr '\n' ' ' )
         eval ssh ${COMMON_SSH_OPTIONS} ${g_rserver} "rm -vf $DELETE"
     else
         : # local stuff
