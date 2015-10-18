@@ -362,7 +362,7 @@ do_read_config "$CONFIG_FILE"
 set_lock || ERR=1 # Try to obtain backup lock
 set_ionice # Enable ionice if possible
 
-RUN_TIME=$( __load_run_time $( echo "$g_target" | md5sum | awk '{print $1}' ) )
+RUN_TIME=$( __load_run_time $( echo "${g_target}_${g_mode}_${g_script}_${g_databases}" | md5sum | awk '{print $1}' ) )
 __log "Loaded run time of previous run: $RUN_TIME seconds"
 __start_watchdog $$ $RUN_TIME
 
@@ -521,7 +521,8 @@ do_rdiff-backup_files() {
         --exclude **/etc/shadow\* --exclude **/etc/passwd\* --exclude **/etc/group\*"
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
-    if [ "$d_short" = "etc" ]; then
+    # also store crontabs
+    if [ "$DIR" = "/etc" ]; then
         mkdir -p /etc/.backup_new
         # Copy crontabs
         mkdir -p /etc/.backup_new/var_spool_cron
@@ -723,7 +724,7 @@ else
     STATUS="UNKNOWN"
 fi
 
-__save_run_time $( echo "$g_target" | md5sum | awk '{print $1}' )
+__save_run_time $( echo "${g_target}_${g_mode}_${g_script}_${g_databases}" | md5sum | awk '{print $1}' )
 __stop_watchdog
 
 __log "Clean log dir"
