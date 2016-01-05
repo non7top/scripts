@@ -17,7 +17,8 @@ COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_
 --exclude '**/var/named/chroot/var/run/dbus' \
 --exclude '**/var/named/chroot/proc' \
 --exclude '**/var/run/mod_fcgid/*'  \
---exclude '**/var/spool/postfix/*/*' "
+--exclude '**/var/spool/postfix/*/*' 
+--exclude '**/var/log/*' "
 
 LOG_DIR=/var/log/backup/$(basename $0)
 LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
