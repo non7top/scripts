@@ -656,6 +656,7 @@ do_mode_systar() {
         --exclude="/dev/log" --exclude="/var/named/chroot/proc/*" \
         --exclude="**/var/run/mod_fcgid/*"  \
         --exclude="**/var/spool/postfix/*/*" \
+        --exclude="**/var/log/*" \
         --exclude="/tmp/*" -X /tmp/fs.excl \
                 2> "$TAR_ERR" 1> "$TAR_STD"
     __log "Contents of $TAR_ERR"
