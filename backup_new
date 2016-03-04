@@ -365,7 +365,7 @@ do_read_config "$CONFIG_FILE"
 set_lock || ERR=1 # Try to obtain backup lock
 set_ionice # Enable ionice if possible
 
-RUN_TIME=$( __load_run_time $( echo "${g_target}_${g_mode}_${g_script}_${g_databases}" | md5sum | awk '{print $1}' ) )
+RUN_TIME=$( __load_run_time $( echo "$*" | md5sum | awk '{print $1}' ) )
 __log "Loaded run time of previous run: $RUN_TIME seconds"
 __start_watchdog $$ $RUN_TIME
 
@@ -728,7 +728,7 @@ else
     STATUS="UNKNOWN"
 fi
 
-__save_run_time $( echo "${g_target}_${g_mode}_${g_script}_${g_databases}" | md5sum | awk '{print $1}' )
+__save_run_time $( echo "$*" | md5sum | awk '{print $1}' )
 __stop_watchdog
 
 __log "Clean log dir"
