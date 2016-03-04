@@ -154,10 +154,12 @@ popd >/dev/null 2>&1
 function set_ionice() {
 IONICE=
 if [ -x /usr/bin/ionice ] &&
-    /usr/bin/ionice -c3 true 2>/dev/null; then
+    /usr/bin/ionice -c 3 true 2>/dev/null; then
     __log "Enabling ionice"
-    IONICE="/usr/bin/ionice -c3"
+    IONICE="/usr/bin/ionice -c 3"
 fi
+
+IONICE="nice -n19 $IONICE"
 
 export IONICE
 }
