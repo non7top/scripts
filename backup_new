@@ -120,8 +120,9 @@ if [ -x /usr/local/bin/curl ]; then
     CURL=/usr/local/bin/curl
 fi
 
-sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/refs | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
-git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+#sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/refs | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+#git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/master | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
 file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
 
 if [ ${git_sha} != ${file_sha} ]; then
