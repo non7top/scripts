@@ -136,7 +136,8 @@ git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/
 file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
 
 if [ ${git_sha} != ${file_sha} ]; then
-    echo "Update available"
+    echo "Current version: $file_sha"
+    echo "Update available: $git_sha"
     TMPDIR=$(mktemp -d -t $SCRIPT_NAME_up.XXXXXX)
     cd $TMPDIR
     eval $CURL -sS "$SCRIPT_URI" -o "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
