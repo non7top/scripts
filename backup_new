@@ -26,7 +26,7 @@ BASE=$HOME/.local/$(basename $0)
 if [[ $EUID -eq 0 ]]; then
     LOG_DIR=/var/log/backup/$(basename $0)
 else
-    LOG_DIR=$BASE
+    LOG_DIR=$BASE/logs
 fi
 
 LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
@@ -743,7 +743,7 @@ __save_run_time $( echo "$*" | md5sum | awk '{print $1}' )
 __stop_watchdog
 
 __log "Clean log dir"
-find "$LOG_DIR" -mtime +60 | xargs -n3 rm -f
+find "$LOG_DIR" -mtime +60 -type f | xargs -n3 rm -f
 
 __log "Backup complete with status: $STATUS"
 
