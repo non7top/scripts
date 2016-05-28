@@ -303,6 +303,8 @@ trap '__check_status $LINENO' ERR
 trap __onexit EXIT INT
 set -o errtrace
 
+__log "Started with options: $*"
+
 if ! echo $* | grep -q skip_update ; then
     autoupdate $*
 fi
@@ -742,9 +744,7 @@ fi
 __save_run_time $( echo "$*" | md5sum | awk '{print $1}' )
 __stop_watchdog
 
-__log "Clean log dir"
-
-[ -d "$LOG_DIR" ] && { find "$LOG_DIR" -mtime +60 -type f  | xargs -n3 rm -f; }
+[ -d "$LOG_DIR" ] && { __log "Clean log dir"; find "$LOG_DIR" -mtime +60 -type f  | xargs -n3 rm -f; }
 
 __log "Backup complete with status: $STATUS"
 
