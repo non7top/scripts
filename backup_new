@@ -17,13 +17,20 @@ COMMON_RSYNC_EXCLUDE="--exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_
 --exclude '**/var/named/chroot/var/run/dbus' \
 --exclude '**/var/named/chroot/proc' \
 --exclude '**/var/run/mod_fcgid/*'  \
---exclude '**/var/spool/postfix/*/*' 
+--exclude '**/var/spool/postfix/*/*'
 --exclude '**/var/log/*' "
 
-LOG_DIR=/var/log/backup/$(basename $0)
-LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
 BACKUP_DATE="$(date +'%F_%H-%M-%S')"
+BASE=$HOME/.local/$(basename $0)
 
+if [[ $EUID -eq 0 ]]; then
+    LOG_DIR=/var/log/backup/$(basename $0)
+else
+    LOG_DIR=$BASE
+fi
+
+LOG_FILE=${LOG_DIR}/backup_new-$(date +"%F_%H-%M-%S").log
+NO_MAIL=0
 
 fd=0   # stdin
 
@@ -39,7 +46,8 @@ if [ ! -t "$fd" ]; then
     #exec > >(tee "$LOG_FILE") 2>&1
     exec > $LOG_FILE 2>&1
     ln -sf "$(basename $LOG_FILE)" "$LOG_DIR/$(basename $0).log"
-
+else
+    NO_MAIL=1
 fi
 
 
@@ -87,7 +95,9 @@ function __onexit() {
         __stop_watchdog
     fi
     #if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
-    if [ $ERR -eq 1 ]; then
+    if [ x1 = x"$NO_MAIL" ]; then
+        __log "Not Sending email"
+    elif [ "$ERR" -ne 0 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $USER
     fi
 }
@@ -157,7 +167,7 @@ IONICE=
 if [ -x /usr/bin/ionice ] &&
     /usr/bin/ionice -c 3 true 2>/dev/null; then
     __log "Enabling ionice"
-    IONICE="/usr/bin/ionice -c 3"
+    IONICE="/usr/bin/ionice -c 2 -n 7"
 fi
 
 IONICE="nice -n19 $IONICE"
@@ -425,7 +435,7 @@ GPG_EOF
 
 do_gpg_check_key() {
     if ! gpg --list-keys|grep -q $GPG_LOCAL_KEY ;then
-        do_gpg_gen_key    
+        do_gpg_gen_key
     fi
     }
 
@@ -538,7 +548,7 @@ do_rdiff-backup_files() {
         __gpg_encrypt_file /etc/group /etc/enc/group.gpg
         __gpg_encrypt_file /etc/shadow /etc/enc/shadow.gpg
     fi
-    
+
     eval $g_dummy $IONICE rdiff-backup ${RDOPTS} $DIR "${g_target}/$d_short"
     eval $g_dummy $IONICE rdiff-backup --remove-older-than $g_keep --force "${g_target}/$d_short"
 
@@ -641,7 +651,7 @@ do_mode_systar() {
     __log "Performing sys tar backup"
     TMP=$(mktemp -d)
     ARCH="$TMP/$(hostname)-$(date +%F).tar"
-    yum clean all 
+    yum clean all
     do_gen_exclude_fs
 
     local BKPDIR=$( dirname $ARCH )
@@ -664,7 +674,7 @@ do_mode_systar() {
                 2> "$TAR_ERR" 1> "$TAR_STD"
     __log "Contents of $TAR_ERR"
     cat "$TAR_ERR"
-    
+
 
     __log "Encrypting arch with gpg"
     __gpg_encrypt_file $ARCH
