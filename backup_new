@@ -97,6 +97,8 @@ function __onexit() {
     #if [ $ERR -eq 1 -a x"$g_verbose" = x0 ]; then
     if [ x1 = x"$NO_MAIL" ]; then
         __log "Not Sending email"
+    elif [ ! -z $g_email ]; then
+        cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $g_email
     elif [ "$ERR" -ne 0 ]; then
         cat -v $LOG_FILE | mail -s "[backup_new] $(hostname) - $(date)" $USER
     fi
@@ -337,6 +339,7 @@ do
     script=*)       g_script=`echo $arg | sed 's/script=//g'`   ;; # absolute path to script
     script_opts=*)  g_script_opts=`echo $arg | sed 's/script_opts=//g'`   ;; # options ofr script
     duplicity_proto=*)   g_duplicity_proto=`echo $arg | sed 's/duplicity_proto=//g'`       ;; # sftp/ftp or whatever is supported
+    email=*)   g_email=`echo $arg | sed 's/email=//g'`       ;; # always send to these emails
     # Valid modes: mysql,fiels(tar,rsnapshot)
     # mysql will store under $target/mysql with rdiff-backup
     # files will store under $target/[dir basename] with rdiff-backup
