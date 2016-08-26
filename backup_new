@@ -367,6 +367,7 @@ echo ${myparams}| grep -i "skip_update" > /dev/null && g_skip_update=1
 echo ${myparams}| grep -i "insecure_etc" > /dev/null && g_insecure_etc=1
 
 ### }}}
+echo "$*"
 
 if [ ! -z $g_config ]; then
     g_config=$( readlink -f "$g_config" )
