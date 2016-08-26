@@ -382,6 +382,7 @@ do_read_config "$CONFIG_FILE"
 set_lock || ERR=1 # Try to obtain backup lock
 set_ionice # Enable ionice if possible
 
+echo "$*"
 RUN_TIME_KEY="$( echo "$*" | md5sum | awk '{print $1}' )"
 RUN_TIME=$( __load_run_time $RUN_TIME_KEY )
 __log "Loaded run time of previous run: $RUN_TIME seconds from key $RUN_TIME_KEY"
