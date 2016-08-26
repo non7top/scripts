@@ -321,7 +321,6 @@ myparams=""
 if [ $# -eq 0 ]; then
     __die "No options specified"
 fi
-echo "$*"
 
 for myarg in ${allparams}
 do
@@ -368,7 +367,6 @@ echo ${myparams}| grep -i "skip_update" > /dev/null && g_skip_update=1
 echo ${myparams}| grep -i "insecure_etc" > /dev/null && g_insecure_etc=1
 
 ### }}}
-echo "$*"
 
 if [ ! -z $g_config ]; then
     g_config=$( readlink -f "$g_config" )
@@ -384,8 +382,7 @@ do_read_config "$CONFIG_FILE"
 set_lock || ERR=1 # Try to obtain backup lock
 set_ionice # Enable ionice if possible
 
-echo "$*"
-RUN_TIME_KEY="$( echo "$*" | md5sum | awk '{print $1}' )"
+RUN_TIME_KEY="$( echo "$allparams" | md5sum | awk '{print $1}' )"
 RUN_TIME=$( __load_run_time $RUN_TIME_KEY )
 __log "Loaded run time of previous run: $RUN_TIME seconds from key $RUN_TIME_KEY"
 __start_watchdog $$ $RUN_TIME
