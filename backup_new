@@ -137,7 +137,7 @@ fi
 git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/master | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
 file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
 
-if [ ${git_sha} != ${file_sha} ]; then
+if [ x"${git_sha}" != x"${file_sha}" ]; then
     echo "Current version: $file_sha"
     echo "Update available: $git_sha"
     TMPDIR=$(mktemp -d -t $SCRIPT_NAME_up.XXXXXX)
