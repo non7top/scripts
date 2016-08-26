@@ -321,6 +321,7 @@ myparams=""
 if [ $# -eq 0 ]; then
     __die "No options specified"
 fi
+echo "$*"
 
 for myarg in ${allparams}
 do
