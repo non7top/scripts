@@ -509,6 +509,7 @@ do_mode_files(){
         fi
 
         do_${g_tool}_files $DIR
+        sleep 5
 
     done
     #unset IFS
@@ -630,6 +631,7 @@ do_mode_mysql(){
                 --routines --triggers \
                 --databases $i --result-file="${TMP}/mysql/${i}.sql"
         fi
+        sleep 5
     done
     echo ""
 
