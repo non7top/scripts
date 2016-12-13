@@ -1,0 +1,223 @@
+#!/bin/bash
+
+_die() { echo "$*"; rm -rf $TMPDIR; exit 1; }
+
+##### Auto-update code{{{
+
+LC_ALL=C
+LANG=C
+SCRIPT_NAME=update_motd
+
+# autoupdate() was auto-included from '/../functions/autoupdate.sh' by make.sh
+
+##### Auto-update code{{{
+function autoupdate() {
+pushd $PWD >/dev/null 2>&1
+
+GITHUB_REPO="non7top/scripts"
+
+SCRIPT_URI="https://raw.githubusercontent.com/${GITHUB_REPO}/master/${SCRIPT_NAME}"
+
+SCRIPT_DEST=$( readlink -f $0 )
+if [ ! -w $SCRIPT_DEST ]; then
+    ID=$( id -u)
+    if [ ${ID} -eq 0 ]; then
+        SCRIPT_DEST=/usr/local/bin/$SCRIPT_NAME
+    else
+        SCRIPT_DEST=$HOME/bin/$SCRIPT_NAME
+    fi
+fi
+
+# Checking for update
+# Workaround for old ebuntus
+CURL=curl
+if [ -x /usr/local/bin/curl ]; then
+    CURL=/usr/local/bin/curl
+fi
+
+#sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/refs | sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+#git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/${sha} | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+git_sha=$( eval $CURL -sS https://api.github.com/repos/${GITHUB_REPO}/git/trees/master | grep -A 5 "\"path\": \"${SCRIPT_NAME}\","|sed -n '/sha/ s|.*: "\(.*\)",|\1|p' )
+file_sha=$( (echo -ne "blob `stat -c %s ${SCRIPT_DEST}`\0"; cat ${SCRIPT_DEST}) | sha1sum | awk '{print $1}' )
+
+if [ x"${git_sha}" != x"${file_sha}" ]; then
+    echo "Current version: $file_sha"
+    echo "Update available: $git_sha"
+    TMPDIR=$(mktemp -d -t $SCRIPT_NAME_up.XXXXXX)
+    cd $TMPDIR
+    eval $CURL -sS "$SCRIPT_URI" -o "$SCRIPT_NAME" || { echo "Error downloading updated script"; return; }
+    if [[ -w $SCRIPT_DEST || -w $(dirname $SCRIPT_DEST) ]]; then
+      echo "Updating with new version"
+      #mv $SCRIPT_DEST /tmp/
+      mv $SCRIPT_NAME $SCRIPT_DEST
+      chmod 700 $SCRIPT_DEST
+      #touch --date="$( date -d @"$REMOTE_MODIFIED" )" $SCRIPT_DEST
+      popd >/dev/null 2>&1
+      exec $SCRIPT_DEST $*
+    else
+        echo "Error updating - destination not writable"
+    fi
+    #rm -rf $TMPDIR
+fi
+popd >/dev/null 2>&1
+}
+##### End auto-update }}}
+
+if ! echo $* | grep -q skip_update ; then
+    autoupdate $*
+fi
+
+fd=0   # stdin
+
+#  As we recall, the -t test option checks whether the stdin, [ -t 0 ],
+#+ or stdout, [ -t 1 ], in a given script is running in a terminal.
+if [ ! -t "$fd" ]; then
+    #non interactive
+
+    # Insert random delay up to 10 minutes
+    sleep $[ ( $RANDOM % 10 )  + 1 ]m
+
+fi
+
+get_distribution_type()
+{
+    local dtype
+    # Assume unknown
+    dtype="unknown"
+
+    # First test against Fedora / RHEL / CentOS / generic Redhat derivative
+    if [ -r /etc/rc.d/init.d/functions ]; then
+        source /etc/rc.d/init.d/functions
+        [ zz`type -t passed 2>/dev/null` == "zzfunction" ] && dtype="redhat"
+
+    # Then test against SUSE (must be after Redhat,
+    # I've seen rc.status on Ubuntu I think? TODO: Recheck that)
+    elif [ -r /etc/rc.status ]; then
+        source /etc/rc.status
+        [ zz`type -t rc_reset 2>/dev/null` == "zzfunction" ] && dtype="suse"
+
+    # Then test against Debian, Ubuntu and friends
+    elif [ -r /lib/lsb/init-functions ]; then
+        source /lib/lsb/init-functions
+        [ zz`type -t log_begin_msg 2>/dev/null` == "zzfunction" ] && dtype="debian"
+
+    # Then test against Gentoo
+    elif [ -r /etc/init.d/functions.sh ]; then
+        source /etc/init.d/functions.sh
+        [ zz`type -t ebegin 2>/dev/null` == "zzfunction" ] && dtype="gentoo"
+
+    # For Slackware we currently just test if /etc/slackware-version exists
+    # and isn't empty (TODO: Find a better way :)
+    elif [ -s /etc/slackware-version ]; then
+        dtype="slackware"
+    fi
+    echo $dtype
+}
+
+
+# Main
+
+if [ -f /etc/.systeminfo ]; then
+        source /etc/.systeminfo
+        h=$( hostname )
+        SERVERNAME=${SERVERNAME:-$h}
+else
+        SERVERNAME=$( hostname )
+fi
+
+
+if [ -f /proc/user_beancounters -a ! -f /proc/vz/version ]; then
+        VM="OpenVZ"
+elif [ -f /sys/hypervisor/uuid ] && [ `head -c 3 /sys/hypervisor/uuid` == ec2 ]; then
+        VM="Amazin EC2 9Xen)"
+elif [ -f /proc/sys/xen/independent_wallclock ]; then
+        VM="Xen"
+elif [ -f /proc/vz/version ]; then
+        VM="Physical (OpenVZ enabled)"
+else
+        VM="Physical"
+fi
+
+DISTRO=$( get_distribution_type )
+case $DISTRO in
+  redhat)
+    if [ -f /etc/centos-release ]; then
+      OS="$(cat /etc/centos-release)"
+    else
+      OS="$(cat /etc/redhat-release)"
+    fi
+    ;;
+  debian)
+    if [ -f /etc/lsb-release ]; then
+      source /etc/lsb-release
+      OS="$DISTRIB_ID $DISTRIB_RELEASE ($DISTRIB_CODENAME)"
+    elif [ -f /etc/debian_version ]; then
+      OS="$(lsb_release -a 2> /dev/null|sed -n '/Description/s/Description:\s*\(.*\)/\1/p')"
+    fi
+    ;;
+   *)
+      OS="$(cat /etc/*release)"
+    ;;
+esac
+
+
+ eval $( grep BITRIX_VA_VER /root/.bash_profile 2> /dev/null|awk '{print $2}' ) &> /dev/null
+if [ ! -z $BITRIX_VA_VER ]; then
+        SITES=$( ls -1 /home/bitrix/ext_www |wc -l )
+        BX_VM="BitrixVM $BITRIX_VA_VER / $SITES sites on this server"
+fi
+
+# Get updates
+if [ -f /var/lib/rpm/Basenames ]; then
+    yum makecache > /dev/null 2>&1
+    UPD=$( yum check-update 2>/dev/null |egrep '(.i686|.i386|.x86_64|.noarch|.src)' | wc -l )
+elif [ -f /var/lib/dpkg/status ]; then
+    apt-get update > /dev/null 2>&1
+    UPD=$( apt-get --just-print upgrade|grep "to remove"|awk '{print $1}' )
+fi
+
+#Get IP adress
+IPADDR="$( '/sbin/ifconfig' | grep "inet " -B 4|grep -e "Link " -e "inet "|awk -F" |:" '/Link/{print $1}; /inet/{print $13}'| paste -s -d " \n" | grep -v -e lo -e 127.0.0. )"
+IPADDR2="$( echo "$IPADDR" | awk '{printf("  IP Addr:  %s %s\n", $1, $2 )}')"
+
+# The different colours as variables
+Y="\033[01;33m" # YELLOW
+C="\033[01;36m" # CYAN
+W="\033[01;37m" # WHITE
+B="\033[01;34m" # BLUE
+G="\033[01;32m" # GREEN
+D="\033[01;31m" # RED
+X="\033[00;37m" # Not sure...
+R="\033[0m"
+#clear > $motd # to clear the screen when showing up
+
+# ISPConfig version
+if [ -f /usr/local/ispconfig/server/./lib/config.inc.php ]; then
+    ISPC_APP_VERSION=$( cat /usr/local/ispconfig/server/./lib/config.inc.php|grep "define('ISPC_APP_VERSION'"|awk '{print $2}'|sed -e "s/'//g" -e "s/);//" )
+    SITES=$( find /var/www -maxdepth 1 -type l|wc -l )
+    ISPC_STRING="ISPConfig $ISPC_APP_VERSION / $SITES sites on this server"
+
+fi
+
+echo -e \
+"${W}***********************************************************************${R}
+
+  Server:   $W${SERVERNAME}$R
+  Hostname: $(hostname -f)$R
+  Location: $LOCATION
+$(echo "$IPADDR2")
+
+
+  VM:       ${Y}${VM}${R}
+
+  OS:       ${G}${OS}${R} $C$(uname -m)${R} ($UPD updates available)
+  Misc:     $ISPC_STRING${D}${BX_VM}${R}
+
+  Platform
+            CPU/Core count: $(cat /proc/cpuinfo | grep processor|wc -l)
+            Memory:         $(free -m|grep Mem|awk '{print $2}')MB
+            Swap:           $(free -m|grep Swap|awk '{print $2}')MB
+
+  Up for $(uptime | sed 's/.*up \([^,]*\), .*/\1/')
+
+${W}***********************************************************************${R}"
