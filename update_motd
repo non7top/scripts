@@ -125,11 +125,13 @@ else
         SERVERNAME=$( hostname )
 fi
 
-
+__is_amazon_ec2=0
 if [ -f /proc/user_beancounters -a ! -f /proc/vz/version ]; then
         VM="OpenVZ"
 elif [ -f /sys/hypervisor/uuid ] && [ `head -c 3 /sys/hypervisor/uuid` == ec2 ]; then
-        VM="Amazin EC2 9Xen)"
+        VM="Amazon EC2 (Xen)"
+	LOCATION="$( curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone )"
+	__is_amazon_ec2=1
 elif [ -f /proc/sys/xen/independent_wallclock ]; then
         VM="Xen"
 elif [ -f /proc/vz/version ]; then
@@ -177,8 +179,13 @@ elif [ -f /var/lib/dpkg/status ]; then
 fi
 
 #Get IP adress
-IPADDR="$( '/sbin/ifconfig' | grep "inet " -B 4|grep -e "Link " -e "inet "|awk -F" |:" '/Link/{print $1}; /inet/{print $13}'| paste -s -d " \n" | grep -v -e lo -e 127.0.0. )"
-IPADDR2="$( echo "$IPADDR" | awk '{printf("  IP Addr:  %s %s\n", $1, $2 )}')"
+ifconfig_version="$( ifconfig --version|& head -n1|awk -F"[ |.]" '{print $2}' )"
+if [ $ifconfig_version -lt 2 ]; then
+	IPADDR="$( '/sbin/ifconfig' | grep "inet " -B 4|grep -e "Link " -e "inet "|awk -F" |:" '/Link/{print $1}; /inet/{print $13}'| paste -s -d " \n" | grep -v -e lo -e 127.0.0. )"
+else
+	IPADDR="$( ifconfig|grep "inet " -B 4|grep -e ": " -e "inet "|awk -F" |:" '/: /{print $1}; /inet /{print $10}'|paste -s -d " \n" | grep -v -e lo -e 127.0.0.)"
+fi
+	IPADDR2="$( echo "$IPADDR" | awk '{printf("  IP Addr:  %s %s\n", $1, $2 )}')"
 
 # The different colours as variables
 Y="\033[01;33m" # YELLOW
@@ -199,6 +206,26 @@ if [ -f /usr/local/ispconfig/server/./lib/config.inc.php ]; then
 
 fi
 
+ec2_info() {
+	av_zone=$( curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone )
+	i_type=$( curl -s http://169.254.169.254/latest/meta-data/instance-type )
+	int_hostname=$( curl -s http://169.254.169.254/latest/meta-data/hostname )
+	ext_hostname=$( curl -s http://169.254.169.254/latest/meta-data/public-hostname )
+	ext_ipv4=$( curl -s http://169.254.169.254/latest/meta-data/public-ipv4 )
+}
+
+EC2_INFO=""
+if [ $__is_amazon_ec2 -eq 1 ]; then
+	ec2_info
+	EC2_INFO="$( echo -e \
+"  ${W}Amazon EC2 info:${R}
+  Zone:     $av_zone
+  Type:     $i_type
+  Ext.ip:   $ext_ipv4
+  Ext.host: $ext_hostname
+" )"
+fi
+
 echo -e \
 "${W}***********************************************************************${R}
 
@@ -212,6 +239,7 @@ $(echo "$IPADDR2")
 
   OS:       ${G}${OS}${R} $C$(uname -m)${R} ($UPD updates available)
   Misc:     $ISPC_STRING${D}${BX_VM}${R}
+$EC2_INFO
 
   Platform
             CPU/Core count: $(cat /proc/cpuinfo | grep processor|wc -l)
