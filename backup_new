@@ -540,7 +540,7 @@ do_rdiff-backup_files() {
     __log "Backing up directory $DIR using rdiff-backup"
     d_short=$( basename $DIR )
     RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls --print-statistics \
-        --exclude **/etc/shadow\* --exclude **/etc/passwd\* --exclude **/etc/group\*"
+        --exclude **/etc/shadow\*"
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
     # also store crontabs
@@ -552,8 +552,6 @@ do_rdiff-backup_files() {
 
         do_check_vars GPG_TARGET_KEY
         mkdir -p /etc/enc
-        __gpg_encrypt_file /etc/passwd /etc/enc/passwd.gpg
-        __gpg_encrypt_file /etc/group /etc/enc/group.gpg
         __gpg_encrypt_file /etc/shadow /etc/enc/shadow.gpg
     fi
 
