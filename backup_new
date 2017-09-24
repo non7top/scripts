@@ -449,7 +449,7 @@ do_gpg_check_key() {
 do_gpg_import_key() {
     # Support multiple GPG_TARGET_KEY
     for key in ${GPG_TARGET_KEY}; do
-        if ! gpg --list-keys --with-colons | grep -q $key; then
+        if ! gpg --list-keys --with-colons | grep -q $key | grep -v "pub:e:" ; then
             gpg --keyserver hkp://pgp.mit.edu --recv-key $key
         fi
     done
