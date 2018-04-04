@@ -12,6 +12,7 @@ COMMON_EXCLUDE=""
 COMMON_GPG_OPTIONS="--trust-model=always --compress-algo=zlib --batch"
 COMMON_SSH_OPTIONS="-oStrictHostKeyChecking=no -oBatchMode=yes -oConnectTimeout=15"
 COMMON_RSYNC_EXCLUDE=" \
+    --exclude '**/upload/resize_cache/*' \
     --exclude '**/bitrix/*cache*/*' --exclude '**/bitrix/html_pages/*' \
     --exclude '**/upload/1c_catalog/*' \
     --exclude '**/web/stats' --exclude '**/clients/*/*/tmp' \
