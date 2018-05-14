@@ -57,6 +57,7 @@ fi
 # Includes
 ###############################################################
 
+
 # colors() was auto-included from '/../functions/colors.sh' by make.sh
 # found on internets
 # The different colours as variables
@@ -303,6 +304,8 @@ function __load_run_time() {
 }
 
 
+# End includes
+
 ERR=0
 
 trap '__check_status $LINENO' ERR
@@ -544,6 +547,18 @@ do_rdiff-backup_files() {
     d_short=$( basename $DIR )
     RDOPTS="${COMMON_RSYNC_EXCLUDE} --no-acls --print-statistics \
         --exclude **/etc/shadow\*"
+
+	__dirs="$(python -m site|grep ,|awk '{print $1}'|sed -e "s/'//g" -e 's/,//g')"
+	__main_file='rdiff_backup/Main.py'
+
+	for d in $__dirs; do
+	if [ -f "$d/$__main_file" ]; then
+		if grep -q no_fsync "$d/$__main_file"; then
+            __log "Enabling no-fsync for rdiff-backup"
+			RDOPTS="$RDOPTS --no-fsync "
+		fi
+	fi
+	done
 
     # Rdiff-backup is unencrypted so add encrypted versions of sensitive files
     # also store crontabs
