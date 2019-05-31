@@ -656,6 +656,40 @@ do_mode_mysql(){
     rm -rf ${TMP} # Cleanup temporary mysql dir
 }
 
+do_mode_postgres() {
+  PG_OPTIONS="-U postgres -h localhost -p 5432 -w"
+  TMP=$(mktemp -d)
+  mkdir -p "$TMP/postgres"
+
+  if [ "x${g_databases}" == "x" ]; then
+    # Backup all
+    __log "Backing up all databases"
+    DBS=`psql $PG_OPTIONS -d postgres -q -t -c 'SELECT datname from pg_database'`
+  else
+    DBS=${g_databases//:/ }
+  fi
+
+  __log "Dumping postgres databases: "
+  for i in $DBS; do
+    echo -n "$i >> "
+
+    if [ "$i" = 'template0' ]; then
+      continue
+    fi
+
+    eval $g_dummy $IONICE pg_dump $PG_OPTIONS --clean --file="${TMP}/postgres/${i}.sql" "${i}"
+    sleep 5
+  done
+
+  eval $g_dummy $IONICE pg_dumpall $PG_OPTIONS --globals-only --file=globals.sql
+
+  echo ""
+  __log "Put temp database dumps under rdiff-backup control"
+  do_${g_tool}_files "${TMP}/postgres"
+  rm -rf ${TMP} # Cleanup temporary mysql dir
+}
+
+
 do_clean_files() {
     # Clean backups older then -keep on -clean day
     #IFS=$':'
@@ -665,6 +699,16 @@ do_clean_files() {
         __log "Cleaning up ${g_target}/$d_short"
         eval $g_dummy rdiff-backup --remove-older-than $g_keep --force "${g_target}/$d_short"
     done
+}
+
+do_clean() {
+  dir="$1"
+  __log "Cleaning up ${g_target}/${dir}"
+  eval $g_dummy rdiff-backup --remove-older-than $g_keep --force "${g_target}/${dir}"
+}
+
+do_clean_postgres() {
+  do_clean postgres
 }
 
 do_clean_mysql() {
@@ -747,6 +791,7 @@ for mode in ${g_mode//:/ }; do
     case $mode in
         files)  g_files=1; do_mode_files ;;
         mysql)  g_mysql=1; do_mode_mysql ;;
+        postgres)  g_postgres=1; do_mode_postgres ;;
         systar) g_systar=1; do_mode_systar ;;
         script) do_mode_script ;;
         clean)  g_clean="yes"; continue ;;
