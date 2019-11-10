@@ -681,7 +681,7 @@ do_mode_postgres() {
     sleep 5
   done
 
-  eval $g_dummy $IONICE pg_dumpall $PG_OPTIONS --globals-only --file=globals.sql
+  eval $g_dummy $IONICE pg_dumpall $PG_OPTIONS --globals-only --file="${TMP}/postgres/globals.sql"
 
   echo ""
   __log "Put temp database dumps under rdiff-backup control"
