@@ -456,7 +456,7 @@ do_gpg_import_key() {
     # Support multiple GPG_TARGET_KEY
     for key in ${GPG_TARGET_KEY}; do
         if ! gpg --list-keys --with-colons | grep -v "pub:e:" | grep -q $key; then
-            gpg --keyserver pool.sks-keyservers.net --recv-key $key
+            gpg --keyserver pool.sks-keyservers.net --refresh-keys $key || gpg --keyserver pool.sks-keyservers.net --recv-key $key
         fi
     done
     }
