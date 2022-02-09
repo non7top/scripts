@@ -456,7 +456,8 @@ do_gpg_import_key() {
     # Support multiple GPG_TARGET_KEY
     for key in ${GPG_TARGET_KEY}; do
         if ! gpg --list-keys --with-colons | grep -v "pub:e:" | grep -q $key; then
-            gpg --keyserver pool.sks-keyservers.net --refresh-keys $key || gpg --keyserver pool.sks-keyservers.net --recv-key $key
+	    gpg --keyserver keys.openpgp.org --recv-key $key
+	    gpg --keyserver keys.openpgp.org --refresh-keys $key
         fi
     done
     }
@@ -484,7 +485,7 @@ __gpg_encrypt_file() {
 
     GPG_VER=$(gpg --version|head -n1|awk '{print $3}'|sed -e 's/\.//g' | tr -cd '[[:digit:]]' | cut -c1-3)
     if [ $GPG_VER -ge 200 ]; then
-        GPG_DAEMON="gpg-agent --daemon"
+        GPG_DAEMON="gpg-agent --daemon --"
     else
         GPG_DAEMON=""
         GPG_OPTS="$GPG_OPTS --no-use-agent"
