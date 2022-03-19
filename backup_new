@@ -486,6 +486,9 @@ __gpg_encrypt_file() {
     GPG_VER=$(gpg --version|head -n1|awk '{print $3}'|sed -e 's/\.//g' | tr -cd '[[:digit:]]' | cut -c1-3)
     if [ $GPG_VER -ge 200 ]; then
         GPG_DAEMON="gpg-agent --daemon --"
+        gpgconf --kill gpg-agent
+        killall -u $LOGNAME gpg-agent || true
+        rm -rfv "$(gpgconf --list-dirs socketdir)"/S.*
     else
         GPG_DAEMON=""
         GPG_OPTS="$GPG_OPTS --no-use-agent"
