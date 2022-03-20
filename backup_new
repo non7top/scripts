@@ -489,7 +489,7 @@ __gpg_encrypt_file() {
 	gpgconf --kill gpg-agent
 	killall -u $LOGNAME gpg-agent || true
 	rm -rfv "$(gpgconf --list-dirs socketdir)"/S.*
-    if [ $GPG_VER -ge 200 ]; then
+    elif [ $GPG_VER -ge 200 ]; then
         GPG_DAEMON="gpg-agent --daemon --"
     else
         GPG_DAEMON=""
